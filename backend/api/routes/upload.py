@@ -215,8 +215,19 @@ async def upload_dataset(
     safe_name = f"{file_id}_{file.filename}"
     save_path = str(Config.get_upload_path(safe_name))
 
-    async with aiofiles.open(save_path, "wb") as f:
-        await f.write(content)
+    # Ensure upload dir exists
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        async with aiofiles.open(save_path, "wb") as f:
+            await f.write(content)
+    except Exception as e:
+        logger.warning(f"Could not save to uploads dir: {e} — using temp file")
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}")
+        tmp.write(content)
+        tmp.close()
+        save_path = tmp.name
 
     # Persist to DB
     owner_id = current_user.id if current_user else None
