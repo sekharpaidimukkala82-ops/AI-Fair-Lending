@@ -62,6 +62,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-navy-900 via-navy-800 to-blue-900 flex items-center justify-center p-4">
+      <BackendStatus />
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -77,7 +78,7 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
+        <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Sign in</h2>
           <p className="text-gray-500 text-sm mb-6">Enter your credentials to access the platform</p>
 
