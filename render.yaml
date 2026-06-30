@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: fairlend-api
+    runtime: python
+    rootDir: .
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python run.py
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        value: ""
+      - key: GROQ_API_KEY
+        value: ""
+      - key: ENVIRONMENT
+        value: production
+    healthCheckPath: /health
