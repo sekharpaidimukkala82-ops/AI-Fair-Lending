@@ -20,6 +20,8 @@ backend/fairlending.db
 backend/chroma_db/
 backend/uploads/
 backend/models_store/
+frontend-react/.env.production
+frontend-react/.env.local
 
 # Node
 node_modules/
