@@ -111,7 +111,10 @@ init_priority4(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],       # Restrict in production
+    allow_origins=[
+        "*",  # Dev — restrict in production by setting ALLOWED_ORIGINS env var
+        # e.g. "https://your-app.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

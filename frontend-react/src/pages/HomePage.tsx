@@ -22,7 +22,7 @@ export default function HomePage() {
 
   const { data: monitoring } = useQuery({
     queryKey: ['monitoring-home'],
-    queryFn: () => fetch('/monitoring/dashboard').then(r => r.json()),
+    queryFn: () => { const base = import.meta.env.VITE_API_URL || ''; return fetch(`${base}/monitoring/dashboard`).then(r => r.json()) },
     refetchInterval: 30000,
   })
 

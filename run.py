@@ -13,10 +13,11 @@ if sys.platform == "win32":
 
 async def serve():
     import uvicorn
+    port = int(os.environ.get("PORT", 8001))
     config = uvicorn.Config(
         app="backend.main:app",
         host="0.0.0.0",
-        port=8001,
+        port=port,
         log_level="info",
         access_log=True,
         reload=False,

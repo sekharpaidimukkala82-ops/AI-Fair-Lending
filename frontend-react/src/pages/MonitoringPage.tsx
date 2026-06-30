@@ -56,7 +56,7 @@ export default function MonitoringPage() {
 
   const { data, isLoading, refetch } = useQuery<DashboardData>({
     queryKey: ['monitoring'],
-    queryFn: () => fetch('/monitoring/dashboard').then(r => r.json()),
+    queryFn: () => { const base = import.meta.env.VITE_API_URL || ''; return fetch(`${base}/monitoring/dashboard`).then(r => r.json()) },
     refetchInterval: 15000,
   })
 

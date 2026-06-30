@@ -45,7 +45,7 @@ export default function Layout() {
   // Health check
   const { data: health } = useQuery({
     queryKey: ['health'],
-    queryFn: () => fetch('/health').then(r => r.json()),
+    queryFn: () => { const base = import.meta.env.VITE_API_URL || ''; return fetch(`${base}/health`).then(r => r.json()) },
     refetchInterval: 30000,
   })
 

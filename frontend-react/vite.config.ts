@@ -9,6 +9,11 @@ export default defineConfig({
       '/api': { target: 'http://localhost:8001', changeOrigin: true },
       '/health': { target: 'http://localhost:8001', changeOrigin: true },
       '/monitoring': { target: 'http://localhost:8001', changeOrigin: true },
+      '/ws': { target: 'ws://localhost:8001', changeOrigin: true, ws: true },
     }
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
   }
 })
