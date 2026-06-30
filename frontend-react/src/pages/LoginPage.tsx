@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useAuthStore } from '../store/authStore'
 import api from '../lib/api'
 import toast from 'react-hot-toast'
-import { Scale, Eye, EyeOff, Wifi, WifiOff, Loader2 } from 'lucide-react'
+import { Scale, Eye, EyeOff } from 'lucide-react'
 
 function BackendStatus() {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking')
@@ -24,16 +24,13 @@ function BackendStatus() {
     return () => clearInterval(interval)
   }, [])
 
+  const color = status === 'online' ? 'bg-green-400' : status === 'offline' ? 'bg-red-500' : 'bg-yellow-400'
+  const pulse = status === 'online' ? 'animate-pulse' : ''
+  const title = status === 'online' ? 'API Online' : status === 'offline' ? 'API Offline' : 'Checking API...'
+
   return (
-    <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${
-      status === 'online'   ? 'bg-green-50 border-green-200 text-green-700' :
-      status === 'offline'  ? 'bg-red-50 border-red-200 text-red-700' :
-                              'bg-gray-50 border-gray-200 text-gray-500'
-    }`}>
-      {status === 'checking' && <Loader2 className="w-3 h-3 animate-spin" />}
-      {status === 'online'   && <><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /><Wifi className="w-3 h-3" /> API Online</>}
-      {status === 'offline'  && <><span className="w-2 h-2 bg-red-500 rounded-full" /><WifiOff className="w-3 h-3" /> API Offline</>}
-      {status === 'checking' && 'Checking API…'}
+    <div className="fixed top-4 right-4 z-50" title={title}>
+      <span className={`block w-3 h-3 rounded-full ${color} ${pulse}`} />
     </div>
   )
 }
@@ -76,9 +73,6 @@ export default function LoginPage() {
               <div className="text-white text-2xl font-bold">FairLend AI</div>
               <div className="text-blue-300 text-sm">Enterprise Fair Lending Platform</div>
             </div>
-          </div>
-          <div className="flex justify-center">
-            <BackendStatus />
           </div>
         </div>
 
