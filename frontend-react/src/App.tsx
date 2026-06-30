@@ -35,8 +35,8 @@ function Page({ component: Component }: { component: React.ComponentType }) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
+      <Route path="/register" element={<ErrorBoundary><RegisterPage /></ErrorBoundary>} />
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route index element={<Page component={HomePage} />} />
         <Route path="upload" element={<Page component={UploadPage} />} />

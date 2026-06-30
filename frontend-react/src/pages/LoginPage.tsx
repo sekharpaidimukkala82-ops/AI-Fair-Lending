@@ -13,7 +13,10 @@ function BackendStatus() {
     const check = async () => {
       try {
         const base = import.meta.env.VITE_API_URL || ''
-        const res = await fetch(`${base}/health`, { signal: AbortSignal.timeout(5000) })
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 5000)
+        const res = await fetch(`${base}/health`, { signal: controller.signal })
+        clearTimeout(timer)
         setStatus(res.ok ? 'online' : 'offline')
       } catch {
         setStatus('offline')
