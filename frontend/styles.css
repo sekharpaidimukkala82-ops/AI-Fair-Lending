@@ -1,0 +1,670 @@
+/* =========================================================================
+   Fair Lending Intelligence Platform – Custom Stylesheet
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   CSS Custom Properties
+   ------------------------------------------------------------------------- */
+:root {
+  --sidebar-width:    240px;
+  --sidebar-bg:       #1a237e;
+  --sidebar-hover:    #283593;
+  --sidebar-active:   #3949ab;
+  --sidebar-text:     #c5cae9;
+  --sidebar-active-text: #ffffff;
+  --topbar-height:    56px;
+  --topbar-bg:        #ffffff;
+  --topbar-border:    #e0e0e0;
+  --content-bg:       #f5f6fa;
+  --card-bg:          #ffffff;
+  --card-radius:      0.75rem;
+  --card-shadow:      0 2px 8px rgba(0,0,0,.08);
+  --primary:          #1976D2;
+  --success:          #388E3C;
+  --danger:           #D32F2F;
+  --warning:          #F57C00;
+  --text-primary:     #212121;
+  --text-secondary:   #757575;
+  --border-color:     #e0e0e0;
+  --chat-user-bg:     #1976D2;
+  --chat-user-text:   #ffffff;
+  --chat-ai-bg:       #f5f5f5;
+  --chat-ai-text:     #212121;
+  --transition:       all 0.2s ease;
+}
+
+/* -------------------------------------------------------------------------
+   Reset / Base
+   ------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--content-bg);
+  color: var(--text-primary);
+  display: flex;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* -------------------------------------------------------------------------
+   Sidebar
+   ------------------------------------------------------------------------- */
+#sidebar {
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1040;
+  transition: var(--transition);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  padding: 1.25rem 1.25rem 1rem;
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  text-decoration: none;
+}
+
+.sidebar-nav {
+  list-style: none;
+  padding: 0.5rem 0;
+  margin: 0;
+  flex: 1;
+}
+
+.sidebar-nav li { margin: 0; }
+
+.sidebar-nav .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 1.25rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-left: 3px solid transparent;
+  transition: var(--transition);
+  cursor: pointer;
+}
+
+.sidebar-nav .nav-item i {
+  width: 18px;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.sidebar-nav .nav-item:hover {
+  background: var(--sidebar-hover);
+  color: #ffffff;
+  border-left-color: rgba(255,255,255,0.4);
+}
+
+.sidebar-nav .nav-item.active {
+  background: var(--sidebar-active);
+  color: var(--sidebar-active-text);
+  border-left-color: #64b5f6;
+}
+
+.sidebar-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+/* -------------------------------------------------------------------------
+   Main Content
+   ------------------------------------------------------------------------- */
+#main-content {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* -------------------------------------------------------------------------
+   Top Bar
+   ------------------------------------------------------------------------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  height: var(--topbar-height);
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--topbar-border);
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  gap: 0.75rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+
+/* -------------------------------------------------------------------------
+   Content Sections
+   ------------------------------------------------------------------------- */
+.content-section {
+  display: none;
+  padding: 1.5rem;
+  flex: 1;
+}
+
+.content-section.active {
+  display: block;
+}
+
+/* -------------------------------------------------------------------------
+   Cards
+   ------------------------------------------------------------------------- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+}
+
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.875rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  border-radius: var(--card-radius) var(--card-radius) 0 0 !important;
+}
+
+.card-body { padding: 1.25rem; }
+.card-footer {
+  background: transparent;
+  border-top: 1px solid var(--border-color);
+  padding: 0.875rem 1.25rem;
+}
+
+/* -------------------------------------------------------------------------
+   Drop Zone
+   ------------------------------------------------------------------------- */
+.drop-zone {
+  border: 2px dashed var(--border-color);
+  border-radius: 0.75rem;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--transition);
+  background: #fafafa;
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--primary);
+  background: #e3f2fd;
+}
+
+/* -------------------------------------------------------------------------
+   Metric Cards
+   ------------------------------------------------------------------------- */
+.metric-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.metric-sub {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
+}
+
+/* -------------------------------------------------------------------------
+   Chat Interface
+   ------------------------------------------------------------------------- */
+.chat-card {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--topbar-height) - 3rem);
+  min-height: 480px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+  scroll-behavior: smooth;
+  background: #fafafa;
+}
+
+.chat-bubble {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  align-items: flex-start;
+}
+
+.chat-bubble.user {
+  flex-direction: row-reverse;
+}
+
+.bubble-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sidebar-bg);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.chat-bubble.user .bubble-avatar {
+  background: var(--primary);
+}
+
+.bubble-content {
+  max-width: 75%;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.chat-bubble.user .bubble-content {
+  background: var(--chat-user-bg);
+  color: var(--chat-user-text);
+  border-bottom-right-radius: 0.25rem;
+}
+
+.chat-bubble.assistant .bubble-content {
+  background: var(--chat-ai-bg);
+  color: var(--chat-ai-text);
+  border-bottom-left-radius: 0.25rem;
+  border: 1px solid var(--border-color);
+}
+
+.bubble-content p:last-child { margin-bottom: 0; }
+
+/* Typing indicator */
+.typing-indicator span {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  margin: 0 2px;
+  animation: bounce 1.2s infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%            { transform: translateY(-6px); }
+}
+
+/* -------------------------------------------------------------------------
+   Search Results
+   ------------------------------------------------------------------------- */
+.search-result-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+  transition: var(--transition);
+}
+
+.search-result-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(25,118,210,.15);
+}
+
+.score-badge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.score-badge.high   { background: #e8f5e9; color: var(--success); }
+.score-badge.medium { background: #fff8e1; color: var(--warning); }
+.score-badge.low    { background: #ffebee; color: var(--danger); }
+
+/* -------------------------------------------------------------------------
+   Risk Badges
+   ------------------------------------------------------------------------- */
+.risk-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.375rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.risk-LOW       { background: #e8f5e9; color: #2e7d32; }
+.risk-MEDIUM    { background: #fff8e1; color: #e65100; }
+.risk-HIGH      { background: #ffebee; color: #c62828; }
+.risk-VERY_HIGH { background: #880e4f; color: #fff; }
+
+/* -------------------------------------------------------------------------
+   Fairness Score Gauge (text-based)
+   ------------------------------------------------------------------------- */
+.fairness-score-circle {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 6px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 auto 0.5rem;
+}
+
+/* -------------------------------------------------------------------------
+   Table Styles
+   ------------------------------------------------------------------------- */
+.table-platform {
+  font-size: 0.85rem;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-platform thead th {
+  background: #f5f5f5;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  padding: 0.6rem 1rem;
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.table-platform tbody td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.table-platform tbody tr:last-child td { border-bottom: 0; }
+.table-platform tbody tr:hover { background: #f9f9f9; }
+
+/* -------------------------------------------------------------------------
+   Alert Badges
+   ------------------------------------------------------------------------- */
+.alert-severity-info     { background: #e3f2fd; color: #1565c0; }
+.alert-severity-warning  { background: #fff8e1; color: #e65100; }
+.alert-severity-critical { background: #ffebee; color: #b71c1c; }
+
+/* -------------------------------------------------------------------------
+   Loading Overlay
+   ------------------------------------------------------------------------- */
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* -------------------------------------------------------------------------
+   Progress Bar
+   ------------------------------------------------------------------------- */
+.progress { height: 6px; border-radius: 3px; overflow: hidden; }
+.progress-bar { transition: width 0.4s ease; }
+
+/* -------------------------------------------------------------------------
+   Scrollbar (webkit)
+   ------------------------------------------------------------------------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #bdbdbd; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9e9e9e; }
+
+/* -------------------------------------------------------------------------
+   Utility
+   ------------------------------------------------------------------------- */
+.font-monospace { font-family: 'Consolas', 'Courier New', monospace; }
+.text-truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cursor-pointer { cursor: pointer; }
+
+/* -------------------------------------------------------------------------
+   Responsive
+   ------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  #sidebar {
+    transform: translateX(-100%);
+  }
+  #sidebar.open {
+    transform: translateX(0);
+  }
+  #main-content {
+    margin-left: 0;
+  }
+  .chat-card {
+    height: calc(100vh - var(--topbar-height) - 2rem);
+  }
+  .metric-value { font-size: 1.5rem; }
+}
+
+/* -------------------------------------------------------------------------
+   Toast Overrides
+   ------------------------------------------------------------------------- */
+.toast { font-size: 0.875rem; }
+
+/* -------------------------------------------------------------------------
+   Source Chip (Chat Sources panel)
+   ------------------------------------------------------------------------- */
+.source-chip {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  background: #f5f5f5;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  border-left: 3px solid var(--primary);
+  word-break: break-word;
+}
+
+.source-chip .source-score {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* -------------------------------------------------------------------------
+   Code blocks inside chat
+   ------------------------------------------------------------------------- */
+.bubble-content pre {
+  background: #282c34;
+  color: #abb2bf;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  overflow-x: auto;
+}
+
+
+/* =========================================================================
+   HOME PAGE
+   ========================================================================= */
+.home-hero {
+  background: linear-gradient(135deg, #1a237e 0%, #283593 50%, #1565C0 100%);
+  color: white;
+  border-radius: 16px;
+  padding: 60px 40px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+.home-hero-icon {
+  font-size: 3.5rem;
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+.home-hero-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.home-hero-subtitle {
+  font-size: 1.05rem;
+  opacity: 0.85;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.feature-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border: 1px solid #e8eaf6;
+  height: 100%;
+}
+.feature-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(26,35,126,0.12);
+}
+.feature-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2rem;
+  margin-bottom: 12px;
+}
+.feature-title {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 6px;
+  color: #1a237e;
+}
+.feature-desc {
+  font-size: 0.83rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+.quick-step {
+  padding: 12px;
+}
+.quick-step-num {
+  width: 40px;
+  height: 40px;
+  background: #1a237e;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 auto 8px;
+}
+.quick-step-label {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+/* =========================================================================
+   GLOBAL DATASET BAR
+   ========================================================================= */
+.global-dataset-bar {
+  display: flex;
+  align-items: center;
+  background: #f0f4ff;
+  border: 1px solid #c5cae9;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-right: 12px;
+}
+
+/* =========================================================================
+   AI SETTINGS
+   ========================================================================= */
+
+/* AI explanation panel */
+#fairness-ai-content {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  line-height: 1.75;
+  color: var(--text-primary);
+}
+
+#fairness-ai-content h6 {
+  color: #1a237e;
+  border-bottom: 1px solid #e8eaf6;
+  padding-bottom: 4px;
+}
+
+/* Key input monospace */
+#gemini-api-key,
+#openai-api-key {
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+/* Provider status in sidebar */
+#api-status-badge[title]::after {
+  content: ' ✦';
+  font-size: 0.65rem;
+}
+
+/* Chat provider badge */
+.chat-provider-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: #e8eaf6;
+  color: #1a237e;
+  letter-spacing: 0.03em;
+}

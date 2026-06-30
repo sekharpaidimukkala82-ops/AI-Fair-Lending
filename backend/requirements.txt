@@ -1,0 +1,40 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+python-multipart==0.0.9
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.4.2
+sentence-transformers==2.7.0
+# chromadb replaced by file-based vector store (ONNX crashes on some systems)
+# chromadb>=1.5.0
+google-generativeai>=0.5.4
+shap==0.45.0
+reportlab==4.2.0
+jinja2==3.1.4
+python-dotenv==1.0.1
+pydantic==2.7.1
+aiofiles==23.2.1
+openpyxl==3.1.2
+scipy==1.13.0
+matplotlib==3.9.0
+seaborn==0.13.2
+
+# AI providers
+groq>=0.9.0
+openai>=1.30.0
+
+# Better embeddings (no PyTorch required)
+fastembed>=0.2.0
+
+# Auth & Database
+sqlalchemy[asyncio]>=2.0.0
+aiosqlite>=0.19.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+psycopg2-binary>=2.9.9
+asyncpg>=0.29.0
+
+# Observability (optional — all gracefully disabled if not installed)
+# sentry-sdk>=1.40.0
+# prometheus-client>=0.20.0
+# redis>=5.0.0

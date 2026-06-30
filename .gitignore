@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+*.env
+!.env.example
+
+# Secrets — never commit
+backend/.env
+backend/fairlending.db
+backend/chroma_db/
+backend/uploads/
+backend/models_store/
+
+# Node
+node_modules/
+frontend-react/node_modules/
+frontend/node_modules/
+dist/
+frontend-react/dist/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Test artifacts
+test_upload.py
+*.tmp
+
+# Large binary files
+*.db
+*.sqlite3
+*.npz
+*.pkl
+*.joblib
+
+# Priority folders (archived versions)
+priority 2/
+P3 and P4/

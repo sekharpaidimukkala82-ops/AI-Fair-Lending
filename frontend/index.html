@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fair Lending Intelligence Platform</title>
+
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <!-- Font Awesome 6 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css?v=4" />
+</head>
+<body>
+
+<!-- ===================================================================== -->
+<!--  SIDEBAR                                                               -->
+<!-- ===================================================================== -->
+<nav id="sidebar">
+  <div class="sidebar-brand">
+    <i class="fa-solid fa-scale-balanced fa-lg me-2"></i>
+    <span>FairLend AI</span>
+  </div>
+
+  <ul class="sidebar-nav">
+    <li>
+      <a href="#" class="nav-item active" data-section="home">
+        <i class="fa-solid fa-house"></i>
+        <span>Home</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="upload">
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+        <span>Upload Data</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="chat">
+        <i class="fa-solid fa-comments"></i>
+        <span>AI Assistant</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <span>Semantic Search</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="fairness">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Fairness Dashboard</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="ml">
+        <i class="fa-solid fa-brain"></i>
+        <span>ML Engine</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="reports">
+        <i class="fa-solid fa-file-pdf"></i>
+        <span>Reports</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="monitoring">
+        <i class="fa-solid fa-gauge-high"></i>
+        <span>Monitoring</span>
+      </a>
+    </li>
+    <li>
+      <a href="#" class="nav-item" data-section="settings">
+        <i class="fa-solid fa-gear"></i>
+        <span>AI Settings</span>
+      </a>
+    </li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <span id="api-status-badge" class="badge bg-secondary">
+      <i class="fa-solid fa-circle me-1"></i> Connecting…
+    </span>
+  </div>
+</nav>
+
+<!-- ===================================================================== -->
+<!--  MAIN CONTENT                                                           -->
+<!-- ===================================================================== -->
+<main id="main-content">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <button class="btn btn-sm btn-outline-secondary d-md-none" id="sidebar-toggle">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+    <h5 class="mb-0 ms-2" id="page-title">Home</h5>
+
+    <!-- Global Dataset Selector — hidden on home, upload, chat, search -->
+    <div id="global-dataset-bar" class="global-dataset-bar d-none">
+      <i class="fa-solid fa-database me-2 text-primary"></i>
+      <span class="me-2 small fw-semibold">Dataset:</span>
+      <select id="global-dataset-select" class="form-select form-select-sm" style="width:280px;max-width:100%">
+        <option value="">— Select uploaded dataset —</option>
+      </select>
+      <button class="btn btn-sm btn-outline-secondary ms-2" onclick="DatasetStore.refresh()" title="Refresh datasets">
+        <i class="fa-solid fa-rotate"></i>
+      </button>
+    </div>
+
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <span class="text-muted small" id="last-updated-label"></span>
+      <button class="btn btn-sm btn-primary" onclick="UI.checkHealth()">
+        <i class="fa-solid fa-rotate me-1"></i>Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- ================================================================= -->
+  <!--  HOME SECTION                                                       -->
+  <!-- ================================================================= -->
+  <section id="section-home" class="content-section active">
+    <!-- Hero banner -->
+    <div class="home-hero">
+      <div class="home-hero-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+      <h1 class="home-hero-title">Fair Lending Intelligence Platform</h1>
+      <p class="home-hero-subtitle">AI-powered HMDA analysis, disparate impact detection, semantic search, and compliance reporting — all in one place.</p>
+      <div class="d-flex gap-3 justify-content-center flex-wrap mt-4">
+        <button class="btn btn-primary btn-lg px-4" onclick="UI.navigate('upload')">
+          <i class="fa-solid fa-cloud-arrow-up me-2"></i>Upload Dataset
+        </button>
+        <button class="btn btn-outline-light btn-lg px-4" onclick="UI.navigate('chat')">
+          <i class="fa-solid fa-robot me-2"></i>Ask AI Assistant
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats row - populated dynamically -->
+    <div class="row g-3 mb-4" id="home-stats-row">
+      <div class="col-md-3"><div class="metric-card text-center"><div class="metric-label">Datasets Uploaded</div><div class="metric-value" id="home-stat-datasets">—</div></div></div>
+      <div class="col-md-3"><div class="metric-card text-center"><div class="metric-label">Total Queries</div><div class="metric-value" id="home-stat-queries">—</div></div></div>
+      <div class="col-md-3"><div class="metric-card text-center"><div class="metric-label">Avg Fairness Score</div><div class="metric-value" id="home-stat-fairness">—</div></div></div>
+      <div class="col-md-3"><div class="metric-card text-center"><div class="metric-label">API Status</div><div class="metric-value" id="home-stat-api" style="color:#388E3C">Online</div></div></div>
+    </div>
+
+    <!-- Feature cards -->
+    <div class="row g-3 mb-4">
+      <div class="col-md-4"><div class="feature-card" onclick="UI.navigate('upload')"><div class="feature-icon bg-primary"><i class="fa-solid fa-cloud-arrow-up"></i></div><div class="feature-title">Upload &amp; Process</div><div class="feature-desc">Ingest CSV, XLSX, JSON datasets. Auto schema detection, data cleaning, quality scoring.</div></div></div>
+      <div class="col-md-4"><div class="feature-card" onclick="UI.navigate('fairness')"><div class="feature-icon bg-danger"><i class="fa-solid fa-chart-pie"></i></div><div class="feature-title">Fairness Audit</div><div class="feature-desc">4/5ths rule disparate impact analysis. Approval rates by race, gender, age.</div></div></div>
+      <div class="col-md-4"><div class="feature-card" onclick="UI.navigate('chat')"><div class="feature-icon bg-success"><i class="fa-solid fa-robot"></i></div><div class="feature-title">AI Assistant</div><div class="feature-desc">RAG-powered chat over your lending data. Ask questions in plain English.</div></div></div>
+      <div class="col-md-4"><div class="feature-card" onclick="UI.navigate('ml')"><div class="feature-icon bg-warning"><i class="fa-solid fa-brain"></i></div><div class="feature-title">ML Engine</div><div class="feature-desc">Train approval prediction models. Batch risk scoring. Anomaly detection.</div></div></div>
+      <div class="col-md-4"><div class="feature-card" onclick="UI.navigate('search')"><div class="feature-icon" style="background:#7B1FA2"><i class="fa-solid fa-magnifying-glass"></i></div><div class="feature-title">Semantic Search</div><div class="feature-desc">Find similar applicants, loans, and policy documents using vector similarity.</div></div></div>
+      <div class="col-md-4"><div class="feature-card" onclick="UI.navigate('reports')"><div class="feature-icon" style="background:#00838F"><i class="fa-solid fa-file-pdf"></i></div><div class="feature-title">Reports</div><div class="feature-desc">Download PDF/JSON fairness, compliance, risk, and executive reports.</div></div></div>
+    </div>
+
+    <!-- Quick start -->
+    <div class="card">
+      <div class="card-header"><i class="fa-solid fa-rocket me-2 text-primary"></i>Quick Start</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-3 text-center"><div class="quick-step"><div class="quick-step-num">1</div><div class="quick-step-label">Upload a CSV dataset</div></div></div>
+          <div class="col-md-3 text-center"><div class="quick-step"><div class="quick-step-num">2</div><div class="quick-step-label">Select it from dropdown</div></div></div>
+          <div class="col-md-3 text-center"><div class="quick-step"><div class="quick-step-num">3</div><div class="quick-step-label">Run Fairness Audit or Train ML</div></div></div>
+          <div class="col-md-3 text-center"><div class="quick-step"><div class="quick-step-num">4</div><div class="quick-step-label">Download Reports</div></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  UPLOAD SECTION                                                     -->
+  <!-- ================================================================= -->
+  <section id="section-upload" class="content-section">
+    <div class="row g-4">
+      <!-- Dataset Upload Card -->
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <i class="fa-solid fa-table me-2 text-primary"></i>Dataset Upload
+          </div>
+          <div class="card-body">
+            <div id="drop-zone-dataset" class="drop-zone" ondragover="event.preventDefault()" ondrop="Upload.handleDrop(event,'dataset')">
+              <i class="fa-solid fa-file-csv fa-3x text-muted mb-3"></i>
+              <p class="mb-1">Drag &amp; drop your lending dataset here</p>
+              <p class="text-muted small">CSV, XLSX, or JSON · Max 100 MB</p>
+              <button class="btn btn-primary mt-2" onclick="document.getElementById('file-dataset').click()">
+                <i class="fa-solid fa-folder-open me-1"></i>Browse File
+              </button>
+              <input type="file" id="file-dataset" accept=".csv,.xlsx,.json" class="d-none"
+                     onchange="Upload.handleFileSelect(this,'dataset')" />
+            </div>
+            <div id="upload-progress-dataset" class="mt-3 d-none">
+              <div class="d-flex justify-content-between mb-1">
+                <small id="upload-status-text-dataset">Uploading…</small>
+                <small id="upload-pct-dataset">0%</small>
+              </div>
+              <div class="progress">
+                <div id="upload-bar-dataset" class="progress-bar progress-bar-striped progress-bar-animated"
+                     role="progressbar" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Document Upload Card -->
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header">
+            <i class="fa-solid fa-file-lines me-2 text-success"></i>Policy Document Upload
+          </div>
+          <div class="card-body">
+            <div id="drop-zone-doc" class="drop-zone" ondragover="event.preventDefault()" ondrop="Upload.handleDrop(event,'doc')">
+              <i class="fa-solid fa-file-pdf fa-3x text-muted mb-3"></i>
+              <p class="mb-1">Upload compliance or policy documents</p>
+              <p class="text-muted small">PDF, TXT, DOCX · Max 100 MB</p>
+              <button class="btn btn-success mt-2" onclick="document.getElementById('file-doc').click()">
+                <i class="fa-solid fa-folder-open me-1"></i>Browse File
+              </button>
+              <input type="file" id="file-doc" accept=".pdf,.txt,.docx" class="d-none"
+                     onchange="Upload.handleFileSelect(this,'doc')" />
+            </div>
+            <div id="upload-progress-doc" class="mt-3 d-none">
+              <div class="d-flex justify-content-between mb-1">
+                <small id="upload-status-text-doc">Uploading…</small>
+                <small id="upload-pct-doc">0%</small>
+              </div>
+              <div class="progress">
+                <div id="upload-bar-doc" class="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                     role="progressbar" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Results -->
+    <div id="upload-results" class="mt-4 d-none">
+      <div class="card">
+        <div class="card-header"><i class="fa-solid fa-circle-check me-2 text-success"></i>Upload Results</div>
+        <div class="card-body" id="upload-results-body"></div>
+      </div>
+    </div>
+
+    <!-- Uploaded Files List -->
+    <div class="card mt-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fa-solid fa-list me-2"></i>Uploaded Files</span>
+        <button class="btn btn-sm btn-outline-primary" onclick="Upload.listUploads()">
+          <i class="fa-solid fa-rotate me-1"></i>Refresh
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div id="uploads-table-container">
+          <p class="text-muted small p-3 mb-0">No files uploaded yet.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  CHAT SECTION                                                       -->
+  <!-- ================================================================= -->
+  <section id="section-chat" class="content-section">
+    <div class="row g-4">
+      <div class="col-lg-8">
+        <div class="card chat-card">
+          <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="fa-solid fa-robot me-2 text-primary"></i>AI Fair Lending Assistant</span>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              <!-- Provider selector -->
+              <select id="chat-provider-select" class="form-select form-select-sm" style="width:110px" title="AI Provider">
+                <option value="">Auto</option>
+                <option value="gemini">Gemini</option>
+                <option value="openai">OpenAI</option>
+              </select>
+              <select id="chat-model-select" class="form-select form-select-sm" style="width:160px" title="Model">
+                <option value="">Default model</option>
+                <optgroup label="Gemini">
+                  <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                  <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                </optgroup>
+                <optgroup label="OpenAI">
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  <option value="gpt-4o">gpt-4o</option>
+                  <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                </optgroup>
+              </select>
+              <input type="text" id="session-id-input" class="form-control form-control-sm" style="width:110px" placeholder="Session ID" value="default" />
+              <button class="btn btn-sm btn-outline-danger" onclick="Chat.clearSession()">
+                <i class="fa-solid fa-trash me-1"></i>Clear
+              </button>
+            </div>
+          </div>
+          <div class="card-body chat-messages" id="chat-messages">
+            <div class="chat-bubble assistant">
+              <div class="bubble-avatar"><i class="fa-solid fa-robot"></i></div>
+              <div class="bubble-content">
+                <p>Hello! I'm your Fair Lending AI Assistant. I can help you analyse HMDA datasets,
+                   identify potential disparate impact, explain lending decisions, and answer questions
+                   about fair lending compliance.</p>
+                <p class="mb-0 text-muted small">Try: <em>"What is the disparate impact for race in this dataset?"</em></p>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <div class="input-group">
+              <input type="text" id="chat-input" class="form-control" placeholder="Ask a fair lending question…"
+                     onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); Chat.send(); }" />
+              <button class="btn btn-primary" onclick="Chat.send()" id="chat-send-btn">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header"><i class="fa-solid fa-bookmark me-2 text-warning"></i>Sources</div>
+          <div class="card-body" id="chat-sources" style="max-height:500px;overflow-y:auto">
+            <p class="text-muted small">Sources will appear here after each query.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  SEARCH SECTION                                                     -->
+  <!-- ================================================================= -->
+  <section id="section-search" class="content-section">
+    <div class="card mb-4">
+      <div class="card-header"><i class="fa-solid fa-magnifying-glass me-2 text-primary"></i>Semantic Search</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <input type="text" id="search-query" class="form-control form-control-lg"
+                   placeholder="Search applicants, loans, policies…"
+                   onkeydown="if(event.key==='Enter') Search.run()" />
+          </div>
+          <div class="col-md-2">
+            <select id="search-type" class="form-select form-select-lg">
+              <option value="semantic">All</option>
+              <option value="similar-applicants">Applicants</option>
+              <option value="similar-loans">Loans</option>
+              <option value="policy">Policy Docs</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary btn-lg w-100" onclick="Search.run()">
+              <i class="fa-solid fa-search me-1"></i>Search
+            </button>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-md-3">
+            <label class="form-label small">Top K Results</label>
+            <input type="number" id="search-top-k" class="form-control form-control-sm" value="10" min="1" max="50" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="search-results-container">
+      <div class="text-muted text-center py-4">
+        <i class="fa-solid fa-search fa-2x mb-2"></i>
+        <p>Enter a query above to search the knowledge base.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  FAIRNESS DASHBOARD                                                 -->
+  <!-- ================================================================= -->
+  <section id="section-fairness" class="content-section">
+    <!-- Controls -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Selected Dataset</label>
+            <div id="fairness-dataset-display" class="form-control bg-light text-muted">No dataset selected — use the dropdown above</div>
+          </div>
+          <div class="col-md-4 d-flex gap-2">
+            <button class="btn btn-primary" onclick="Fairness.runAudit()">
+              <i class="fa-solid fa-magnifying-glass-chart me-1"></i>Run Audit
+            </button>
+            <button class="btn btn-success" onclick="Fairness.runAiExplain()" title="AI-powered explanation">
+              <i class="fa-solid fa-wand-sparkles me-1"></i>AI Explain
+            </button>
+            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-register-csv">
+              <i class="fa-solid fa-file-import me-1"></i>Register CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Column Detection Result -->
+        <div id="fairness-detected-cols" class="mt-3 d-none">
+          <div class="alert alert-info py-2 small mb-0">
+            <i class="fa-solid fa-search me-1"></i>
+            <strong>Auto-detected:</strong>
+            <span id="fairness-detected-info"></span>
+            <button class="btn btn-link btn-sm py-0 ms-2" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#fairness-override-panel">
+              Override columns
+            </button>
+          </div>
+          <div class="collapse mt-2" id="fairness-override-panel">
+            <div class="card card-body py-2 small">
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label mb-1">Outcome Column</label>
+                  <input type="text" id="fairness-outcome-col" class="form-control form-control-sm"
+                         placeholder="e.g. action_taken or default" />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label mb-1">Protected Columns (key=col, comma-separated)</label>
+                  <input type="text" id="fairness-protected-cols" class="form-control form-control-sm"
+                         placeholder="e.g. gender=applicant_sex, race=applicant_race_1" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Score Cards -->
+    <div class="row g-3 mb-4" id="fairness-score-cards">
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Fairness Score</div>
+          <div class="metric-value" id="metric-fairness-score">—</div>
+          <div class="metric-sub" id="metric-fairness-interpretation">Run audit to compute</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Race DI Ratio</div>
+          <div class="metric-value" id="metric-race-di">—</div>
+          <div class="metric-sub">4/5ths threshold: 80%</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Gender DI Ratio</div>
+          <div class="metric-value" id="metric-gender-di">—</div>
+          <div class="metric-sub">4/5ths threshold: 80%</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Bias Indicators</div>
+          <div class="metric-value text-danger" id="metric-bias-count">—</div>
+          <div class="metric-sub">Flagged issues</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header">Approval Rates by Race</div>
+          <div class="card-body"><canvas id="chart-race-approval" height="200"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header">Approval Rates by Gender</div>
+          <div class="card-body"><canvas id="chart-gender-approval" height="200"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Findings & Recommendations -->
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header text-danger"><i class="fa-solid fa-triangle-exclamation me-2"></i>Findings</div>
+          <div class="card-body" id="fairness-findings">
+            <p class="text-muted small">Run an audit to see findings.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header text-success"><i class="fa-solid fa-lightbulb me-2"></i>Recommendations</div>
+          <div class="card-body" id="fairness-recommendations">
+            <p class="text-muted small">Run an audit to see recommendations.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- AI Explanation Panel -->
+    <div id="fairness-ai-panel" class="card mt-4 d-none">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="fa-solid fa-wand-sparkles me-2 text-warning"></i>AI-Powered Fair Lending Analysis</span>
+        <span id="fairness-ai-provider-badge" class="badge bg-primary small"></span>
+      </div>
+      <div class="card-body" id="fairness-ai-content" style="white-space:pre-wrap;font-size:0.88rem;line-height:1.7">
+        <div class="text-center py-3">
+          <div class="spinner-border text-warning spinner-border-sm me-2"></div>
+          Generating AI analysis…
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  ML ENGINE SECTION                                                  -->
+  <!-- ================================================================= -->
+  <section id="section-ml" class="content-section">
+    <div class="row g-4">
+      <!-- Train Panel -->
+      <div class="col-lg-4">
+        <div class="card">
+          <div class="card-header"><i class="fa-solid fa-dumbbell me-2 text-primary"></i>Train Model</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Selected Dataset</label>
+              <div id="ml-dataset-display" class="form-control bg-light text-muted">No dataset selected</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Target Column (optional override)</label>
+              <input type="text" id="ml-target-col" class="form-control" placeholder="e.g. action_taken" />
+            </div>
+            <button class="btn btn-primary w-100" onclick="ML.train()">
+              <i class="fa-solid fa-play me-1"></i>Train Model
+            </button>
+            <div id="ml-train-result" class="mt-3"></div>
+          </div>
+        </div>
+
+        <!-- Predict Panel -->
+        <div class="card mt-4">
+          <div class="card-header"><i class="fa-solid fa-bullseye me-2 text-success"></i>Predict Single</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Record JSON</label>
+              <textarea id="ml-predict-record" class="form-control font-monospace" rows="5"
+                        placeholder='{"applicant_income": 75000, "loan_amount": 320000, "credit_score": 720, "dti_ratio": 35}'></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Applicant ID (optional)</label>
+              <input type="text" id="ml-predict-id" class="form-control" placeholder="APP-001" />
+            </div>
+            <button class="btn btn-success w-100" onclick="ML.predict()">
+              <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Predict
+            </button>
+            <div id="ml-predict-result" class="mt-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Batch & Results Panel -->
+      <div class="col-lg-8">
+        <div class="card">
+          <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="fa-solid fa-layer-group me-2 text-warning"></i>Batch Predictions</span>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              <div id="ml-batch-display" class="form-control form-control-sm bg-light text-muted" style="width:200px">No dataset</div>
+              <button class="btn btn-sm btn-warning" onclick="ML.predictBatch()">
+                <i class="fa-solid fa-bolt me-1"></i>Run Batch
+              </button>
+              <button class="btn btn-sm btn-outline-info" onclick="ML.getSegments()">
+                <i class="fa-solid fa-diagram-project me-1"></i>Segments
+              </button>
+              <button class="btn btn-sm btn-outline-danger" onclick="ML.getAnomalies()">
+                <i class="fa-solid fa-bug me-1"></i>Anomalies
+              </button>
+            </div>
+          </div>
+          <div class="card-body" id="ml-batch-results">
+            <p class="text-muted small">Train a model, then run batch predictions.</p>
+          </div>
+        </div>
+
+        <!-- Risk Distribution Chart -->
+        <div class="card mt-4">
+          <div class="card-header">Risk Distribution</div>
+          <div class="card-body"><canvas id="chart-risk-dist" height="160"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  REPORTS SECTION                                                    -->
+  <!-- ================================================================= -->
+  <section id="section-reports" class="content-section">
+    <div class="row g-4">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header"><i class="fa-solid fa-file-pdf me-2 text-danger"></i>Generate Reports</div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Selected Dataset</label>
+              <div id="report-dataset-display" class="form-control bg-light text-muted">No dataset selected</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Format</label>
+              <select id="report-format" class="form-select">
+                <option value="pdf">PDF</option>
+                <option value="json">JSON</option>
+              </select>
+            </div>
+            <div class="d-grid gap-2">
+              <button class="btn btn-danger" onclick="Reports.download('fairness')">
+                <i class="fa-solid fa-download me-2"></i>Fairness Report
+              </button>
+              <button class="btn btn-primary" onclick="Reports.download('compliance')">
+                <i class="fa-solid fa-download me-2"></i>Compliance Report
+              </button>
+              <button class="btn btn-warning" onclick="Reports.download('risk')">
+                <i class="fa-solid fa-download me-2"></i>Risk Report
+              </button>
+              <button class="btn btn-success" onclick="Reports.download('executive-summary')">
+                <i class="fa-solid fa-download me-2"></i>Executive Summary
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header"><i class="fa-solid fa-circle-info me-2 text-info"></i>Report Guide</div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              <li class="list-group-item">
+                <strong>Fairness Report</strong><br/>
+                <small class="text-muted">Disparate impact ratios, approval rates by protected class, bias indicators.</small>
+              </li>
+              <li class="list-group-item">
+                <strong>Compliance Report</strong><br/>
+                <small class="text-muted">HMDA data quality, missing fields, decision distribution summary.</small>
+              </li>
+              <li class="list-group-item">
+                <strong>Risk Report</strong><br/>
+                <small class="text-muted">ML risk scores, distribution by category, high-risk applicant sample.</small>
+              </li>
+              <li class="list-group-item">
+                <strong>Executive Summary</strong><br/>
+                <small class="text-muted">Consolidated KPIs, findings, and recommendations for leadership.</small>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  MONITORING SECTION                                                 -->
+  <!-- ================================================================= -->
+  <section id="section-monitoring" class="content-section">
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4" id="monitoring-kpi-row">
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Total Queries</div>
+          <div class="metric-value" id="mon-total-queries">—</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Avg Response Time</div>
+          <div class="metric-value" id="mon-avg-rt">—</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Avg Fairness Score</div>
+          <div class="metric-value" id="mon-avg-fairness">—</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="metric-card">
+          <div class="metric-label">Open Alerts</div>
+          <div class="metric-value text-warning" id="mon-open-alerts">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header">Query Volume (Last 24 h)</div>
+          <div class="card-body"><canvas id="chart-query-volume" height="180"></canvas></div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card">
+          <div class="card-header">Fairness Score Trend</div>
+          <div class="card-body"><canvas id="chart-fairness-trend" height="180"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts Table -->
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fa-solid fa-bell me-2 text-warning"></i>Active Alerts</span>
+        <button class="btn btn-sm btn-outline-primary" onclick="Monitoring.load()">
+          <i class="fa-solid fa-rotate me-1"></i>Refresh
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <div id="alerts-table-container">
+          <p class="text-muted small p-3 mb-0">No alerts yet.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!--  AI SETTINGS SECTION                                              -->
+  <!-- ================================================================= -->
+  <section id="section-settings" class="content-section">
+
+    <!-- Provider Status Banner -->
+    <div id="ai-status-banner" class="alert alert-warning d-flex align-items-center gap-2 mb-4">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <span>No AI provider configured. Add an API key below to enable AI-powered features.</span>
+    </div>
+
+    <div class="row g-4">
+
+      <!-- Gemini Card -->
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <span><i class="fa-solid fa-robot me-2" style="color:#4285F4"></i>Google Gemini</span>
+            <span id="gemini-status-badge" class="badge bg-secondary">Not Configured</span>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted mb-3">
+              Powers AI Chat, Fairness AI Explanation, and RAG responses.
+              Get a free API key at
+              <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>.
+            </p>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Gemini API Key</label>
+              <div class="input-group">
+                <input type="password" id="gemini-api-key" class="form-control font-monospace"
+                       placeholder="AIza..." autocomplete="off" />
+                <button class="btn btn-outline-secondary" type="button"
+                        onclick="Settings.toggleVisibility('gemini-api-key')">
+                  <i class="fa-solid fa-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Model</label>
+              <select id="gemini-model" class="form-select">
+                <option value="gemini-2.0-flash">gemini-2.0-flash (Latest, recommended)</option>
+                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Fastest, free)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash (Stable)</option>
+                <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b (Lightweight)</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro (Most capable)</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary flex-grow-1" onclick="Settings.saveKey('gemini')">
+                <i class="fa-solid fa-key me-1"></i>Save & Activate
+              </button>
+              <button class="btn btn-outline-secondary" onclick="Settings.testKey('gemini')" title="Test connection">
+                <i class="fa-solid fa-plug-circle-check"></i>
+              </button>
+              <button class="btn btn-outline-danger" onclick="Settings.clearKey('gemini')" title="Remove key">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+            <div id="gemini-test-result" class="mt-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OpenAI Card -->
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <span><i class="fa-solid fa-brain me-2" style="color:#10a37f"></i>OpenAI GPT</span>
+            <span id="openai-status-badge" class="badge bg-secondary">Not Configured</span>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted mb-3">
+              Alternative AI engine for chat and fairness analysis.
+              Get an API key at
+              <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a>.
+            </p>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">OpenAI API Key</label>
+              <div class="input-group">
+                <input type="password" id="openai-api-key" class="form-control font-monospace"
+                       placeholder="sk-..." autocomplete="off" />
+                <button class="btn btn-outline-secondary" type="button"
+                        onclick="Settings.toggleVisibility('openai-api-key')">
+                  <i class="fa-solid fa-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Model</label>
+              <select id="openai-model" class="form-select">
+                <option value="gpt-4o-mini">gpt-4o-mini (Fast, affordable)</option>
+                <option value="gpt-4o">gpt-4o (Most capable)</option>
+                <option value="gpt-4-turbo">gpt-4-turbo</option>
+                <option value="gpt-3.5-turbo">gpt-3.5-turbo (Cheapest)</option>
+              </select>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-success flex-grow-1" onclick="Settings.saveKey('openai')">
+                <i class="fa-solid fa-key me-1"></i>Save & Activate
+              </button>
+              <button class="btn btn-outline-secondary" onclick="Settings.testKey('openai')" title="Test connection">
+                <i class="fa-solid fa-plug-circle-check"></i>
+              </button>
+              <button class="btn btn-outline-danger" onclick="Settings.clearKey('openai')" title="Remove key">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
+            <div id="openai-test-result" class="mt-2"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.row -->
+
+    <!-- Active Provider Info -->
+    <div class="card mt-4">
+      <div class="card-header"><i class="fa-solid fa-circle-info me-2 text-info"></i>Active Provider</div>
+      <div class="card-body" id="active-provider-info">
+        <p class="text-muted small mb-0">Save an API key to see active provider details.</p>
+      </div>
+    </div>
+
+    <!-- AI Feature Guide -->
+    <div class="card mt-4">
+      <div class="card-header"><i class="fa-solid fa-wand-sparkles me-2 text-warning"></i>AI-Powered Features</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="d-flex gap-3 align-items-start">
+              <i class="fa-solid fa-comments fa-lg text-primary mt-1"></i>
+              <div>
+                <div class="fw-semibold small">AI Chat Assistant</div>
+                <div class="text-muted" style="font-size:0.8rem">RAG-powered Q&A over your lending data using your configured model.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="d-flex gap-3 align-items-start">
+              <i class="fa-solid fa-chart-pie fa-lg text-danger mt-1"></i>
+              <div>
+                <div class="fw-semibold small">AI Fairness Explanation</div>
+                <div class="text-muted" style="font-size:0.8rem">LLM generates compliance narrative from statistical audit results.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="d-flex gap-3 align-items-start">
+              <i class="fa-solid fa-file-pdf fa-lg text-success mt-1"></i>
+              <div>
+                <div class="fw-semibold small">AI Report Generation</div>
+                <div class="text-muted" style="font-size:0.8rem">Executive summaries and compliance narratives powered by AI.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</main><!-- /#main-content -->
+
+<!-- ===================================================================== -->
+<!--  MODALS                                                                -->
+<!-- ===================================================================== -->
+
+<!-- Register CSV Modal -->
+<div class="modal fade" id="modal-register-csv" tabindex="-1" aria-labelledby="modalRegisterCsvLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalRegisterCsvLabel">Register CSV Dataset</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Dataset ID (leave blank to auto-generate)</label>
+          <input type="text" id="csv-reg-id" class="form-control" placeholder="my-dataset-001" />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">CSV Content</label>
+          <textarea id="csv-reg-content" class="form-control font-monospace" rows="10"
+placeholder="applicant_income,loan_amount,credit_score,dti_ratio,race,gender,decision
+75000,320000,720,35,White,Male,Approved
+55000,280000,650,42,Black,Female,Denied
+90000,400000,780,28,Hispanic,Male,Approved"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="Fairness.registerCsv()">
+          <i class="fa-solid fa-upload me-1"></i>Register Dataset
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"></div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="d-none">
+  <div class="spinner-border text-light" role="status"></div>
+  <p class="text-light mt-3" id="loading-message">Processing…</p>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="app.js?v=11"></script>
+</body>
+</html>

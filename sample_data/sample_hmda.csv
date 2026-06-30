@@ -1,0 +1,31 @@
+applicant_income,loan_amount,credit_score,dti_ratio,race,gender,age,state,action_taken,loan_purpose,loan_type,property_type
+85000,320000,720,32,White,Male,35,CA,Approved,Purchase,Conventional,Single Family
+62000,280000,680,41,Black,Female,42,TX,Denied,Purchase,Conventional,Single Family
+95000,400000,760,28,Hispanic,Male,29,NY,Approved,Purchase,FHA,Single Family
+45000,180000,640,48,White,Female,55,FL,Denied,Refinance,Conventional,Single Family
+110000,450000,800,25,Asian,Male,38,CA,Approved,Purchase,Conventional,Condo
+72000,260000,700,37,Black,Male,44,TX,Approved,Purchase,FHA,Single Family
+55000,220000,650,45,Hispanic,Female,31,NY,Denied,Purchase,Conventional,Single Family
+130000,500000,820,22,White,Male,48,CA,Approved,Purchase,Conventional,Single Family
+48000,190000,630,52,Black,Female,39,FL,Denied,Refinance,FHA,Single Family
+88000,350000,740,30,White,Female,36,TX,Approved,Purchase,Conventional,Single Family
+67000,270000,690,38,Hispanic,Male,33,CA,Approved,Purchase,FHA,Single Family
+42000,170000,620,55,Black,Male,51,NY,Denied,Purchase,Conventional,Single Family
+98000,380000,755,29,White,Female,40,FL,Approved,Refinance,Conventional,Single Family
+53000,210000,660,43,Asian,Female,28,CA,Approved,Purchase,FHA,Condo
+77000,300000,710,35,Hispanic,Male,45,TX,Denied,Purchase,Conventional,Single Family
+115000,460000,790,24,White,Male,52,NY,Approved,Purchase,Conventional,Single Family
+61000,240000,675,40,Black,Female,34,FL,Denied,Refinance,FHA,Single Family
+91000,360000,745,31,White,Male,47,CA,Approved,Purchase,Conventional,Single Family
+58000,230000,665,42,Hispanic,Female,30,TX,Approved,Purchase,FHA,Single Family
+104000,420000,775,27,Asian,Male,41,NY,Approved,Purchase,Conventional,Condo
+49000,195000,635,50,Black,Female,46,FL,Denied,Purchase,Conventional,Single Family
+83000,330000,725,33,White,Male,37,CA,Approved,Refinance,Conventional,Single Family
+65000,255000,685,39,Hispanic,Male,43,TX,Denied,Purchase,FHA,Single Family
+120000,480000,810,23,White,Female,50,NY,Approved,Purchase,Conventional,Single Family
+44000,175000,625,53,Black,Male,38,FL,Denied,Purchase,Conventional,Single Family
+78000,310000,715,34,White,Female,32,CA,Approved,Purchase,Conventional,Single Family
+70000,275000,695,36,Hispanic,Female,29,TX,Approved,Purchase,FHA,Single Family
+140000,550000,840,20,Asian,Male,55,NY,Approved,Purchase,Conventional,Single Family
+46000,185000,632,51,Black,Female,42,FL,Denied,Refinance,FHA,Single Family
+93000,370000,750,30,White,Male,44,CA,Approved,Purchase,Conventional,Single Family
