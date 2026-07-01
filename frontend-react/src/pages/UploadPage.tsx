@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
+import React from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDatasetStore } from '../store/datasetStore'
@@ -293,7 +294,7 @@ export default function UploadPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {uploads.map(u => (
-                  <tr key={u.file_id} className={`hover:bg-gray-50 transition-colors ${selectedId === u.file_id ? 'bg-blue-50' : ''}`}>
+                  <React.Fragment key={u.file_id}><tr className={`hover:bg-gray-50 transition-colors ${selectedId === u.file_id ? 'bg-blue-50' : ''}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -357,7 +358,7 @@ export default function UploadPage() {
                   </tr>
                   {/* Expandable detail panel */}
                   {expandedId === u.file_id && u.status === 'completed' && (
-                    <tr key={`${u.file_id}-detail`}>
+                    <tr>
                       <td colSpan={8} className="px-4 pb-4">
                         <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
                           <div className="text-center">
@@ -398,6 +399,7 @@ export default function UploadPage() {
                       </td>
                     </tr>
                   )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
