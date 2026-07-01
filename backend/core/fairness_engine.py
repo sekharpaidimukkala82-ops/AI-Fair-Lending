@@ -81,7 +81,9 @@ UNKNOWN_VALUES = {
     "information not provided", "free form text only",
     "race not available", "sex not available", "ethnicity not available",
     "nan", "none", "", "na", "n/a", "unknown", "other",
-    "6", "7", "8",  # HMDA not-provided codes
+    "6", "7", "8",       # HMDA not-provided codes
+    "8888", "9999",      # HMDA age not-applicable codes
+    "exempt",            # HMDA exempt institutions
 }
 
 _profiler = DatasetProfiler()
@@ -293,22 +295,32 @@ class FairnessEngine:
 
     def _bucket_age(self, series: pd.Series) -> pd.Series:
         """Convert numeric age values into age brackets for group analysis."""
+        # If already bucketed (e.g. HMDA uses '<25', '25-34', '>74'), pass through
+        sample = series.dropna().astype(str).str.strip()
+        already_bucketed = sample.str.match(r'^[<>]?\d+(-\d+)?$').mean() < 0.5
+        if already_bucketed:
+            return sample
+
         numeric = pd.to_numeric(series, errors="coerce")
-        if numeric.notna().sum() < len(series) * 0.5:
-            # Not mostly numeric — return as-is (already bucketed or text)
+        if numeric.notna().sum() < len(series) * 0.3:
+            # Not mostly numeric — return as-is
             return series.astype(str).str.strip()
 
         def _bracket(age):
             if pd.isna(age):
                 return "Unknown"
+            age = float(age)
+            # HMDA special codes
+            if age >= 8000:
+                return "Unknown"
             age = int(age)
-            if age < 25:    return "Under 25"
+            if age < 25:    return "<25"
             if age < 35:    return "25-34"
             if age < 45:    return "35-44"
             if age < 55:    return "45-54"
-            if age < 62:    return "55-61"
-            if age < 70:    return "62-69"
-            return "70+"
+            if age < 65:    return "55-64"
+            if age < 75:    return "65-74"
+            return ">74"
 
         return numeric.map(_bracket)
 
