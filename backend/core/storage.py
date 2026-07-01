@@ -45,13 +45,13 @@ def upload_file(file_bytes: bytes, filename: str, file_id: str) -> str:
     """
     Upload file bytes to storage. Returns the storage path/key.
     Uses Supabase if configured, otherwise saves to local disk.
+    Always succeeds — falls back to temp file if everything else fails.
     """
     client = _get_client()
     storage_path = f"{file_id}_{filename}"
 
     if client:
         try:
-            # Upload to Supabase Storage
             client.storage.from_(BUCKET_NAME).upload(
                 path=storage_path,
                 file=file_bytes,

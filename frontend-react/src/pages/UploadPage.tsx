@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDatasetStore } from '../store/datasetStore'
@@ -41,15 +41,29 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ── Live WebSocket progress bar for a single upload ─────────────────────────
-function UploadProgressBar({ fileId, filename, onComplete }: {
+function UploadProgressBar({ fileId, filename, onComplete, uploads }: {
   fileId: string
   filename: string
   onComplete: () => void
+  uploads: Array<{ file_id: string; status: string }>
 }) {
   const [progress, setProgress] = useState(5)
   const [step, setStep] = useState('Queued')
   const [done, setDone] = useState(false)
   const [failed, setFailed] = useState(false)
+
+  // Poll uploads list as fallback when WebSocket isn't available
+  useEffect(() => {
+    if (done || failed) return
+    const match = uploads.find(u => u.file_id === fileId)
+    if (match?.status === 'completed') {
+      setDone(true)
+      setProgress(100)
+      setTimeout(onComplete, 1500)
+    } else if (match?.status === 'failed') {
+      setFailed(true)
+    }
+  }, [uploads, fileId, done, failed, onComplete])
 
   useTaskProgress(fileId, {
     onMessage: (evt: WSEvent) => {
@@ -58,7 +72,7 @@ function UploadProgressBar({ fileId, filename, onComplete }: {
       if (evt.event === 'processing.completed') {
         setDone(true)
         setProgress(100)
-        setTimeout(onComplete, 2000)
+        setTimeout(onComplete, 1500)
       }
       if (evt.event === 'processing.failed') setFailed(true)
     },
@@ -215,6 +229,7 @@ export default function UploadPage() {
           key={u.fileId}
           fileId={u.fileId}
           filename={u.filename}
+          uploads={uploads}
           onComplete={() => {
             setActiveWsUploads(prev => prev.filter(x => x.fileId !== u.fileId))
             queryClient.invalidateQueries({ queryKey: ['uploads-all'] })
