@@ -324,7 +324,7 @@ export default function UploadPage() {
                         <div className="flex items-center gap-1.5">
                           <button
                             onClick={() => { setSelected(u.file_id); toast.success(`Active dataset: ${u.filename}`) }}
-                            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors w-16 justify-center ${
                               selectedId === u.file_id ? 'bg-navy-900 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                             }`}
                           >
