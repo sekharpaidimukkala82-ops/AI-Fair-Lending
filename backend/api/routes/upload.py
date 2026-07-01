@@ -105,7 +105,10 @@ async def _process_dataset_bg(file_id: str, file_path: str, filename: str) -> No
         if narratives and vs is not None and embedder is not None:
             from backend.models.schemas import DocumentChunk
             chunks, texts = [], []
-            for narr in narratives:
+            # Limit to 500 rows on free tier to avoid OOM kills
+            max_rows = 500
+            narratives_to_index = narratives[:max_rows]
+            for narr in narratives_to_index:
                 cid = str(uuid.uuid4())
                 chunks.append(DocumentChunk(
                     chunk_id=cid, text=narr.text,
@@ -114,7 +117,12 @@ async def _process_dataset_bg(file_id: str, file_path: str, filename: str) -> No
                 ))
                 texts.append(narr.text)
             try:
-                vs.add_documents(chunks, embedder.embed_batch(texts))
+                # Process in batches of 50 to avoid memory spikes
+                batch_size = 50
+                for i in range(0, len(chunks), batch_size):
+                    batch_chunks = chunks[i:i+batch_size]
+                    batch_texts = texts[i:i+batch_size]
+                    vs.add_documents(batch_chunks, embedder.embed_batch(batch_texts))
             except Exception as e:
                 logger.warning(f"[{file_id}] Vector indexing failed (non-fatal): {e}")
 

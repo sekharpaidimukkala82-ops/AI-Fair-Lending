@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+import os
 import threading
 from typing import List, Optional
 
@@ -28,12 +29,18 @@ _BACKEND: str = "hash"   # "fastembed" | "sbert" | "hash"
 _FastTextEmbedding = None
 _SentenceTransformer = None
 
-try:
-    from fastembed import TextEmbedding as _FastTextEmbedding  # type: ignore
-    _BACKEND = "fastembed"
-    logger.info("Embedder: using fastembed (ONNX backend)")
-except Exception:
-    pass
+# Allow disabling fastembed via env var (saves ~500MB RAM on free tier hosting)
+_FASTEMBED_DISABLED = os.environ.get("DISABLE_FASTEMBED", "").lower() in ("1", "true", "yes")
+
+if not _FASTEMBED_DISABLED:
+    try:
+        from fastembed import TextEmbedding as _FastTextEmbedding  # type: ignore
+        _BACKEND = "fastembed"
+        logger.info("Embedder: using fastembed (ONNX backend)")
+    except Exception:
+        pass
+else:
+    logger.info("Embedder: fastembed disabled via DISABLE_FASTEMBED env var — using hash fallback")
 
 if _BACKEND == "hash":
     # NOTE: sentence-transformers requires PyTorch which has DLL issues

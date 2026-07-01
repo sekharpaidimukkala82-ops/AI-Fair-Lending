@@ -91,7 +91,6 @@ async def _fallback_process_bg(file_id: str, file_path: str, filename: str) -> N
         # Read file
         df = _read_dataframe(file_path, filename)
         logger.info(f"[{file_id}] Read {len(df)} rows")
-
         # Schema discovery
         sd = SchemaDiscovery()
         discovery = sd.generate_discovery_report(df)
@@ -100,20 +99,33 @@ async def _fallback_process_bg(file_id: str, file_path: str, filename: str) -> N
         dp = DataProcessor()
         df_clean, proc_report = dp.process(df, discovery.field_mappings)
 
-        # Generate narratives and index
+        # Generate narratives and index — skip for large files to avoid OOM
         try:
-            ng = NarrativeGenerator()
-            narratives = ng.generate_batch(df_clean, discovery.field_mappings)
-            embedder = Embedder()
-            vs = VectorStore()
-            from backend.models.schemas import DocumentChunk
-            chunks = [DocumentChunk(
-                chunk_id=str(_uuid.uuid4()), text=n.text,
-                metadata={**{k: str(v) for k, v in n.metadata.items()}, "dataset_id": file_id, "type": "narrative"},
-                source=filename,
-            ) for n in narratives]
-            if chunks:
-                vs.add_documents(chunks, embedder.embed_batch([c.text for c in chunks]))
+            if len(df_clean) <= 500:  # only embed small datasets on free tier
+                ng = NarrativeGenerator()
+                narratives = ng.generate_batch(df_clean, discovery.field_mappings)
+                embedder = Embedder()
+                vs = VectorStore()
+                from backend.models.schemas import DocumentChunk
+                # Process in small batches to avoid memory issues
+                batch_size = 50
+                all_chunks = []
+                all_embeddings = []
+                for i in range(0, len(narratives), batch_size):
+                    batch = narratives[i:i+batch_size]
+                    chunks = [DocumentChunk(
+                        chunk_id=str(_uuid.uuid4()), text=n.text,
+                        metadata={**{k: str(v) for k, v in n.metadata.items()}, "dataset_id": file_id, "type": "narrative"},
+                        source=filename,
+                    ) for n in batch]
+                    embs = embedder.embed_batch([c.text for c in chunks])
+                    all_chunks.extend(chunks)
+                    all_embeddings.extend(embs)
+                if all_chunks:
+                    vs.add_documents(all_chunks, all_embeddings)
+                logger.info(f"[{file_id}] Indexed {len(all_chunks)} vectors")
+            else:
+                logger.info(f"[{file_id}] Skipping vector indexing for large dataset ({len(df_clean)} rows) — search may be limited")
         except Exception as e:
             logger.warning(f"[{file_id}] Vector indexing failed (non-fatal): {e}")
 
