@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-# Cache bust: 2026-07-01-v2
+# Cache bust: 2026-07-01-v3-fix-outcome-detection
 WORKDIR /app
 
 # Copy and install dependencies first (better layer caching)
