@@ -54,10 +54,6 @@ def _get_explain_engine():
 # Cache predictions by dataset_id for use by reports route
 _predictions_cache: Dict[str, List[MLPrediction]] = {}
 
-# Shared dataset store reference
-from backend.api.routes.fairness import _datasets, _dataset_field_maps
-
-
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
@@ -80,31 +76,9 @@ class AnomalyRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _get_df(dataset_id: str) -> pd.DataFrame:
-    df = _datasets.get(dataset_id)
-    if df is None:
-        # Try loading from disk on server restart
-        try:
-            from backend.config import Config
-            upload_dir = Path(Config.UPLOAD_DIR)
-            for f in upload_dir.iterdir():
-                if f.name.startswith(dataset_id):
-                    ext = f.suffix.lower()
-                    if ext == ".csv":
-                        df = pd.read_csv(f)
-                    elif ext == ".xlsx":
-                        df = pd.read_excel(f, engine="openpyxl")
-                    elif ext == ".json":
-                        df = pd.read_json(f)
-                    if df is not None:
-                        _datasets[dataset_id] = df
-                        return df
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=404,
-            detail=f"Dataset '{dataset_id}' not found. Please re-upload your dataset.",
-        )
-    return df
+    """Load dataset from disk — stateless, always fresh."""
+    from backend.api.routes.fairness import _load_dataset
+    return _load_dataset(dataset_id)
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +93,10 @@ async def train_model(
 ):
     """Train the approval prediction model. Auth optional — records trainer if logged in."""
     df = _get_df(request.dataset_id)
-    field_map = _dataset_field_maps.get(request.dataset_id)
 
     try:
         metrics = _get_ml_engine().train(
-            df, field_map=field_map, target_col_override=request.target_column,
+            df, field_map=None, target_col_override=request.target_column,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

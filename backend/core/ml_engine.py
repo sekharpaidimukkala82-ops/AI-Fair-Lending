@@ -123,10 +123,11 @@ class MLEngine:
         return X, feature_names
 
     def _encode_target(self, series: pd.Series) -> np.ndarray:
-        """Convert decision strings to binary (1 = approved, 0 = denied/other)."""
-        return series.astype(str).str.lower().apply(
-            lambda v: 1 if v in APPROVAL_VALUES else 0
-        ).values
+        """Convert decision strings to binary (1 = approved, 0 = denied/other).
+        Uses the same universal approval check as the fairness engine."""
+        from backend.core.fairness_engine import FairnessEngine
+        engine = FairnessEngine()
+        return series.apply(engine._is_approval).astype(int).values
 
     def _resolve_target_col(
         self,
@@ -138,10 +139,9 @@ class MLEngine:
             return override
         if field_map and "decision" in field_map:
             return field_map["decision"]
-        for col in df.columns:
-            if any(kw in col.lower() for kw in ("decision", "action_taken", "outcome", "status")):
-                return col
-        return None
+        # Use the fairness engine's smarter detection
+        from backend.core.fairness_engine import FairnessEngine
+        return FairnessEngine()._detect_outcome_col(df, field_map)
 
     def _resolve_id_col(
         self,
@@ -173,11 +173,21 @@ class MLEngine:
         if target_col is None:
             raise ValueError("Could not find a decision/outcome column for training.")
 
-        # Drop non-feature columns
+        # Drop non-feature columns — outcome, IDs, and outcome-correlated columns
+        # Denial reason columns directly leak the outcome — must be excluded
+        LEAKAGE_KEYWORDS = (
+            "denial", "deny", "rejection", "action_taken", "action_name",
+            "outcome", "decision", "status", "purchaser", "preapproval",
+        )
         drop_cols = [target_col]
         id_col = self._resolve_id_col(df, field_map)
         if id_col:
             drop_cols.append(id_col)
+        # Also drop any column that would leak the outcome
+        for col in df.columns:
+            cl = col.lower()
+            if any(kw in cl for kw in LEAKAGE_KEYWORDS) and col not in drop_cols:
+                drop_cols.append(col)
 
         feature_df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
         y = self._encode_target(df[target_col])
