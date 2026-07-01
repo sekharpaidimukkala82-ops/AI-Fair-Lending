@@ -34,7 +34,11 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Add new columns to existing tables (idempotent migrations)
+        # SQLite doesn't support IF NOT EXISTS on ALTER TABLE, so catch the error
         try:
-            await conn.execute(text("ALTER TABLE datasets ADD COLUMN IF NOT EXISTS storage_ref TEXT"))
+            if "sqlite" in DATABASE_URL:
+                await conn.execute(text("ALTER TABLE datasets ADD COLUMN storage_ref TEXT"))
+            else:
+                await conn.execute(text("ALTER TABLE datasets ADD COLUMN IF NOT EXISTS storage_ref TEXT"))
         except Exception:
-            pass  # Column already exists or not PostgreSQL
+            pass  # Column already exists
