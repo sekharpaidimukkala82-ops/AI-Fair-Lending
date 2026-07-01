@@ -97,7 +97,8 @@ async def _process_dataset_bg(file_id: str, file_path: str, filename: str) -> No
         logger.info(f"[{file_id}] Processing: {filename}")
         _upload_status[file_id]["status"] = "processing"
 
-        df = _read_dataframe(file_path, filename)        discovery = sd.generate_discovery_report(df)
+        df = _read_dataframe(file_path, filename)
+        discovery = sd.generate_discovery_report(df)
         df_clean, proc_report = dp.process(df, discovery.field_mappings)
         narratives = ng.generate_batch(df_clean, discovery.field_mappings)
 
