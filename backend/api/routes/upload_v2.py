@@ -173,7 +173,7 @@ async def _fallback_process_bg(file_id: str, file_path: str, filename: str) -> N
 # ── Routes ─────────────────────────────────────────────────────────────────
 
 @router.post("/dataset", response_model=UploadResponse, status_code=202)
-async def upload_dataset(
+async def upload_dataset_v2(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
