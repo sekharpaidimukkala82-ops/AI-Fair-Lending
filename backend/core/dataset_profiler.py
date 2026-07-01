@@ -230,15 +230,21 @@ class DatasetProfiler:
             return True
         if v in HMDA_DENIAL_CODES:
             return False
-        # German credit
+        # German credit (0=good/approved, 1=bad/denied)
         if v == "0":
             return True
         if v == "1":
             return False
-        # Normalized text — handles Approved, approved, APPROVED, Originated, etc.
-        return v in {"approved", "originated", "loan originated",
-                     "approved but not accepted", "funded", "preapproval approved",
-                     "approve", "yes", "accepted", "closed", "true", "1.0"}
+        # Explicit denial values — check first
+        denial_vals = {"denied", "deny", "rejected", "declined", "no",
+                       "false", "0.0", "application denied", "preapproval denied"}
+        if v in denial_vals:
+            return False
+        # Approval values
+        approval_vals = {"approved", "originated", "loan originated",
+                         "approved but not accepted", "funded", "preapproval approved",
+                         "approve", "yes", "accepted", "closed", "true", "1.0"}
+        return v in approval_vals
 
     def get_strategic_sample(self, df: pd.DataFrame) -> pd.DataFrame:
         """

@@ -63,9 +63,13 @@ def _try_load_from_disk(dataset_id: str) -> Optional[pd.DataFrame]:
             local_path = storage_download(storage_ref, dataset_id)
             if local_path:
                 ext = Path(local_path).suffix.lower()
-                if ext == ".csv":    return pd.read_csv(local_path)
-                elif ext == ".xlsx": return pd.read_excel(local_path, engine="openpyxl")
-                elif ext == ".json": return pd.read_json(local_path)
+                if ext == ".csv":    df = pd.read_csv(local_path)
+                elif ext == ".xlsx": df = pd.read_excel(local_path, engine="openpyxl")
+                elif ext == ".json": df = pd.read_json(local_path)
+                if df is not None:
+                    from backend.core.data_processor import DataProcessor
+                    df, _ = DataProcessor().process(df)
+                    return df
 
         # Fallback: scan local uploads directory
         from backend.config import Config
@@ -75,9 +79,13 @@ def _try_load_from_disk(dataset_id: str) -> Optional[pd.DataFrame]:
         for f in upload_dir.iterdir():
             if f.name.startswith(dataset_id):
                 ext = f.suffix.lower()
-                if ext == ".csv":    return pd.read_csv(f)
-                elif ext == ".xlsx": return pd.read_excel(f, engine="openpyxl")
-                elif ext == ".json": return pd.read_json(f)
+                if ext == ".csv":    df = pd.read_csv(f)
+                elif ext == ".xlsx": df = pd.read_excel(f, engine="openpyxl")
+                elif ext == ".json": df = pd.read_json(f)
+                if df is not None:
+                    from backend.core.data_processor import DataProcessor
+                    df, _ = DataProcessor().process(df)
+                    return df
     except Exception as e:
         import logging
         logging.getLogger("fair_lending.fairness").warning(f"Could not load dataset {dataset_id} from storage: {e}")

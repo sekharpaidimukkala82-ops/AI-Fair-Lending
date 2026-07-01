@@ -111,7 +111,13 @@ export default function UploadPage() {
     queryKey: ['uploads-all'],
     queryFn: async () => {
       const res = await api.get('/upload/list')
-      return res.data.uploads || []
+      const list: UploadRecord[] = res.data.uploads || []
+      // Auto-activate the most recently completed dataset if none is selected
+      if (!selectedId) {
+        const latest = list.find(u => u.status === 'completed')
+        if (latest) setSelected(latest.file_id)
+      }
+      return list
     },
     refetchInterval: 3000,
   })
@@ -213,6 +219,9 @@ export default function UploadPage() {
             setActiveWsUploads(prev => prev.filter(x => x.fileId !== u.fileId))
             queryClient.invalidateQueries({ queryKey: ['uploads-all'] })
             queryClient.invalidateQueries({ queryKey: ['datasets'] })
+            // Auto-activate the newly processed dataset
+            setSelected(u.fileId)
+            toast.success(`${u.filename} is now active`)
           }}
         />
       ))}
