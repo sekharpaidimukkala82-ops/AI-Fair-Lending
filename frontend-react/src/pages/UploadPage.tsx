@@ -2,12 +2,13 @@ import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDatasetStore } from '../store/datasetStore'
+import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
 import { safeFormatDistance } from '../lib/utils'
 import toast from 'react-hot-toast'
 import {
   Upload, FileText, CheckCircle, XCircle, Clock, Loader2,
-  Database, BarChart3, CheckSquare, Wifi
+  Database, BarChart3, CheckSquare, Wifi, ShieldCheck, ChevronDown, ChevronUp, Rows3
 } from 'lucide-react'
 import { useTaskProgress, type WSEvent } from '../hooks/useWebSocket'
 
@@ -118,8 +119,10 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number } | null>(null)
   const [activeWsUploads, setActiveWsUploads] = useState<Array<{ fileId: string; filename: string }>>([])
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { selectedId, setSelected } = useDatasetStore()
+  const navigate = useNavigate()
 
   const { data: uploads = [], isLoading } = useQuery<UploadRecord[]>({
     queryKey: ['uploads-all'],
@@ -317,15 +320,33 @@ export default function UploadPage() {
                     <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{safeFormatDistance(u.uploaded_at)}</td>
                     <td className="px-4 py-3">
                       {u.status === 'completed' && (
-                        <button
-                          onClick={() => { setSelected(u.file_id); toast.success(`Active dataset: ${u.filename}`) }}
-                          className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                            selectedId === u.file_id ? 'bg-navy-900 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                          }`}
-                        >
-                          <CheckSquare className="w-3 h-3" />
-                          {selectedId === u.file_id ? 'Active' : 'Use'}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => { setSelected(u.file_id); toast.success(`Active dataset: ${u.filename}`) }}
+                            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                              selectedId === u.file_id ? 'bg-navy-900 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                            }`}
+                          >
+                            <CheckSquare className="w-3 h-3" />
+                            {selectedId === u.file_id ? 'Active' : 'Use'}
+                          </button>
+                          {u.status === 'completed' && (
+                            <button
+                              onClick={() => { setSelected(u.file_id); navigate('/fairness') }}
+                              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                              title="Run Fairness Audit"
+                            >
+                              <ShieldCheck className="w-3 h-3" /> Fairness
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setExpandedId(expandedId === u.file_id ? null : u.file_id)}
+                            className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                            title="Dataset details"
+                          >
+                            {expandedId === u.file_id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       )}
                       {u.status === 'failed' && u.error_message && (
                         <span className="text-xs text-red-500 truncate max-w-32 block" title={u.error_message}>
@@ -334,6 +355,49 @@ export default function UploadPage() {
                       )}
                     </td>
                   </tr>
+                  {/* Expandable detail panel */}
+                  {expandedId === u.file_id && u.status === 'completed' && (
+                    <tr key={`${u.file_id}-detail`}>
+                      <td colSpan={8} className="px-4 pb-4">
+                        <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-navy-900">{u.total_rows?.toLocaleString() ?? '—'}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">Total Records</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-navy-900">
+                              {u.mapped_columns != null && u.total_columns != null ? `${u.mapped_columns}/${u.total_columns}` : u.total_columns ?? '—'}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">Columns Mapped</div>
+                          </div>
+                          <div className="text-center">
+                            <div className={`text-2xl font-bold ${u.quality_score != null ? (u.quality_score >= 80 ? 'text-green-600' : u.quality_score >= 60 ? 'text-amber-600' : 'text-red-600') : 'text-gray-400'}`}>
+                              {u.quality_score != null ? `${u.quality_score.toFixed(0)}%` : '—'}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">Data Quality</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-navy-900">{safeFormatDistance(u.uploaded_at)}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">Uploaded</div>
+                          </div>
+                          <div className="col-span-2 sm:col-span-4 flex gap-2 pt-2 border-t border-gray-200">
+                            <button onClick={() => { setSelected(u.file_id); navigate('/fairness') }}
+                              className="flex items-center gap-1.5 text-xs bg-navy-900 text-white px-4 py-2 rounded-lg hover:bg-navy-800 transition-colors font-medium">
+                              <ShieldCheck className="w-3.5 h-3.5" /> Run Fairness Audit
+                            </button>
+                            <button onClick={() => { setSelected(u.file_id); navigate('/ml') }}
+                              className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors font-medium">
+                              <BarChart3 className="w-3.5 h-3.5" /> ML Engine
+                            </button>
+                            <button onClick={() => { setSelected(u.file_id); navigate('/search') }}
+                              className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                              <Rows3 className="w-3.5 h-3.5" /> Search Records
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 ))}
               </tbody>
             </table>
