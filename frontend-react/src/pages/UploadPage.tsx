@@ -205,7 +205,7 @@ export default function UploadPage() {
         ) : (
           <>
             <p className="text-gray-700 font-semibold text-lg mb-1">Drag & drop files here, or click to browse</p>
-            <p className="text-gray-400 text-sm">Supports CSV, XLSX, JSON · Multiple files allowed</p>
+            <p className="text-gray-400 text-sm">Supports CSV, XLSX, JSON · Multiple files allowed · Max 200 MB</p>
             <p className="text-xs text-gray-400 mt-1 flex items-center justify-center gap-1">
               <Wifi className="w-3 h-3 text-green-500" /> Real-time processing progress via WebSocket
             </p>
