@@ -38,8 +38,22 @@ export default function FairnessPage() {
   const selected = getSelected()
   const [result, setResult] = useState<FairnessResult | null>(null)
   const [showExplain, setShowExplain] = useState(false)
+  const [showColInfo, setShowColInfo] = useState(false)
 
-  // (no auto-load query — /fairness/latest endpoint does not exist)
+  const [colInfo, setColInfo] = useState<any>(null)
+
+  // Auto-detect columns when dataset changes
+  const detectQuery = useQuery({
+    queryKey: ['detect-columns', selectedId],
+    queryFn: async () => {
+      if (!selectedId) return null
+      try {
+        const res = await api.get(`/fairness/detect-columns/${selectedId}`)
+        return res.data
+      } catch { return null }
+    },
+    enabled: !!selectedId,
+  })
 
   const auditMutation = useMutation({
     mutationFn: async () => {
@@ -49,7 +63,12 @@ export default function FairnessPage() {
     },
     onSuccess: (data) => {
       setResult(data)
-      toast.success(`Fairness audit complete — score: ${data.score?.toFixed(1)}`)
+      const biasCount = data.bias_indicators?.length ?? 0
+      if (biasCount === 0 && data.score === 100) {
+        toast.success(`Audit complete — Score: ${data.score?.toFixed(1)} (no bias detected)`)
+      } else {
+        toast.success(`Fairness audit complete — score: ${data.score?.toFixed(1)}`)
+      }
     },
     onError: (err: any) => toast.error(err.response?.data?.detail || 'Audit failed'),
   })
@@ -129,7 +148,21 @@ export default function FairnessPage() {
       {selectedId && !result && !auditMutation.isPending && (
         <div className="card p-8 text-center">
           <Shield className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 mb-4">No fairness audit has been run for <strong>{selected?.filename}</strong> yet.</p>
+          <p className="text-gray-500 mb-2">No fairness audit has been run for <strong>{selected?.filename}</strong> yet.</p>
+          {/* Show detected columns before audit */}
+          {detectQuery.data && (
+            <div className="mt-3 mb-4 text-left max-w-md mx-auto bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1">
+              <div className="font-semibold text-gray-700 mb-1">Detected columns in this dataset:</div>
+              <div>📊 Outcome: <span className="font-mono bg-white px-1 rounded">{detectQuery.data.detected_outcome_column || 'Not found'}</span></div>
+              {Object.entries(detectQuery.data.detected_protected_columns || {}).map(([k, v]: any) => (
+                <div key={k}>👥 {k}: <span className="font-mono bg-white px-1 rounded">{v}</span></div>
+              ))}
+              {Object.keys(detectQuery.data.detected_protected_columns || {}).length === 0 && (
+                <div className="text-amber-600 font-medium">⚠ No race/gender/age columns detected — upload a dataset with demographic columns for full analysis.</div>
+              )}
+              <div className="text-gray-400">{detectQuery.data.total_rows?.toLocaleString()} rows · {detectQuery.data.dataset_type}</div>
+            </div>
+          )}
           <button onClick={() => auditMutation.mutate()} className="btn-primary">Run Fairness Audit</button>
         </div>
       )}
@@ -144,6 +177,27 @@ export default function FairnessPage() {
 
       {result && (
         <>
+          {/* All-passing notice */}
+          {result.score === 100 && (result.bias_indicators?.length ?? 0) === 0 && (
+            <div className="card p-4 border-green-200 bg-green-50 flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold text-green-800">No bias detected in this dataset</div>
+                <div className="text-sm text-green-700 mt-0.5">
+                  All demographic groups show similar approval rates. This may mean the dataset is genuinely fair,
+                  or demographic columns are missing / all values are the same.
+                  {detectQuery.data?.detected_outcome_column
+                    ? ` Outcome column used: "${detectQuery.data.detected_outcome_column}".`
+                    : ' No outcome column was detected.'}
+                </div>
+                {detectQuery.data && Object.keys(detectQuery.data.detected_protected_columns || {}).length === 0 && (
+                  <div className="text-sm text-amber-700 mt-1 font-medium">
+                    ⚠ No demographic columns (race/gender/age) were found — upload a dataset with these columns for full fair lending analysis.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {/* Score cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <ScoreCard
