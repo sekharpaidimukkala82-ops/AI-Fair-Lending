@@ -311,13 +311,18 @@ async def get_upload_status(file_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/list")
-async def list_uploads(db: AsyncSession = Depends(get_db)):
-    """Return all uploaded datasets — from DB + disk fallback for legacy files."""
+async def list_uploads(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Return uploaded datasets. Admins see all; analysts see only their own."""
     uploads = {}
 
-    # 1. From database (authoritative source)
+    # 1. From database — filter by owner for non-admins
     try:
-        db_datasets = await list_datasets(db)
+        is_admin = current_user and current_user.role == "admin"
+        owner_filter = None if is_admin else (current_user.id if current_user else None)
+        db_datasets = await list_datasets(db, owner_id=owner_filter)
         for ds in db_datasets:
             uploads[ds.file_id] = {
                 "file_id": ds.file_id,
