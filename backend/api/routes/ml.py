@@ -289,16 +289,20 @@ async def get_applicant_segments(request: BatchPredictRequest):
 async def detect_anomalies(request: AnomalyRequest):
     """
     Detect anomalous loan applications using IsolationForest.
-    Returns indices of flagged records.
+    Auto-trains on the dataset if model not yet trained.
     """
-    if not _get_ml_engine().is_trained:
-        raise HTTPException(status_code=422, detail="Model not trained.")
-
     df = _get_df(request.dataset_id)
-    field_map = _dataset_field_maps.get(request.dataset_id)
+    engine = _get_ml_engine()
+
+    # Auto-train if not trained yet (IsolationForest is unsupervised, always works)
+    if not engine.is_trained:
+        try:
+            engine.train(df)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Auto-train failed: {exc}")
 
     try:
-        anomaly_indices = _get_ml_engine().detect_anomalies(df, field_map)
+        anomaly_indices = engine.detect_anomalies(df, None)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -308,8 +312,9 @@ async def detect_anomalies(request: AnomalyRequest):
         "dataset_id": request.dataset_id,
         "total_records": len(df),
         "anomaly_count": len(anomaly_indices),
+        "anomaly_rate": round(len(anomaly_indices) / len(df) * 100, 2) if len(df) > 0 else 0,
         "anomaly_indices": anomaly_indices,
-        "anomalous_records": anomalous_records[:50],  # limit response size
+        "anomalous_records": anomalous_records[:50],
     }
 
 
