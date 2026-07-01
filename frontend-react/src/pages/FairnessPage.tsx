@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useDatasetStore } from '../store/datasetStore'
 import api from '../lib/api'
@@ -39,8 +39,13 @@ export default function FairnessPage() {
   const [result, setResult] = useState<FairnessResult | null>(null)
   const [showExplain, setShowExplain] = useState(false)
   const [showColInfo, setShowColInfo] = useState(false)
-
   const [colInfo, setColInfo] = useState<any>(null)
+
+  // Clear result whenever the selected dataset changes — never show stale data
+  useEffect(() => {
+    setResult(null)
+    setShowExplain(false)
+  }, [selectedId])
 
   // Auto-detect columns when dataset changes
   const detectQuery = useQuery({

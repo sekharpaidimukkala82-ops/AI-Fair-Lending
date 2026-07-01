@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useDatasetStore } from '../store/datasetStore'
 import api from '../lib/api'
@@ -40,6 +40,13 @@ export default function MLPage() {
   const [anomalyResult, setAnomalyResult] = useState<AnomalyResult | null>(null)
   const [clusterResult, setClusterResult] = useState<ClusterResult | null>(null)
   const [showFeatures, setShowFeatures] = useState(true)
+
+  // Clear all results when dataset changes — never show stale data
+  useEffect(() => {
+    setMlResult(null)
+    setAnomalyResult(null)
+    setClusterResult(null)
+  }, [selectedId])
 
   const trainMutation = useMutation({
     mutationFn: async () => {
