@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   ShieldCheck, Scale, GitBranch, FileText, Play, AlertTriangle,
@@ -273,6 +273,12 @@ export default function AdvancedFairnessPage() {
   const [tab, setTab] = useState<AdvTab>('full')
   const [result, setResult] = useState<Record<string, unknown> | null>(null)
   const [letter, setLetter] = useState('')
+
+  // Clear results when dataset changes
+  useEffect(() => {
+    setResult(null)
+    setLetter('')
+  }, [activeDataset?.file_id])
 
   const [eqForm, setEqForm] = useState({ outcome_col: '', pred_col: '', protected_col: '', tolerance: '0.10' })
   const [intForm, setIntForm] = useState({ outcome_col: '', protected_cols: '' })

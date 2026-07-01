@@ -37,14 +37,41 @@ _lineage  = get_lineage_tracker()
 
 
 def _load_df(file_id: str) -> pd.DataFrame:
-    upload_dir = Path(Config.UPLOAD_DIR)
-    for f in upload_dir.iterdir():
-        if f.name.startswith(file_id):
-            ext = f.suffix.lower()
-            if ext == ".csv":   return pd.read_csv(f)
-            if ext == ".xlsx":  return pd.read_excel(f, engine="openpyxl")
-            if ext == ".json":  return pd.read_json(f)
-    raise HTTPException(404, f"Dataset file not found for id '{file_id}'")
+    """Load dataset from disk — uses same stateless loader as fairness route."""
+    from backend.api.routes.fairness import _load_dataset
+    return _load_dataset(file_id)
+
+
+def _auto_outcome_col(df: pd.DataFrame, override: Optional[str] = None) -> str:
+    """Auto-detect outcome column using the fairness engine."""
+    if override and override in df.columns:
+        return override
+    from backend.core.fairness_engine import FairnessEngine
+    col = FairnessEngine()._detect_outcome_col(df)
+    if not col:
+        raise HTTPException(400, "Could not detect outcome column. Please specify outcome_col.")
+    return col
+
+
+def _auto_protected_cols(df: pd.DataFrame, override: Optional[List[str]] = None) -> List[str]:
+    """Auto-detect protected attribute columns using the fairness engine."""
+    if override:
+        return [c for c in override if c in df.columns]
+    from backend.core.fairness_engine import FairnessEngine
+    detected = FairnessEngine()._detect_all_protected_cols(df)
+    cols = list(detected.values())
+    if not cols:
+        raise HTTPException(400, "No protected attribute columns found. Please specify protected_cols.")
+    return cols
+
+
+def _encode_outcome(df: pd.DataFrame, outcome_col: str) -> pd.DataFrame:
+    """Encode outcome column to binary 0/1 for ML-based analysis."""
+    from backend.core.fairness_engine import FairnessEngine
+    engine = FairnessEngine()
+    df = df.copy()
+    df[outcome_col] = df[outcome_col].apply(lambda x: 1 if engine._is_approval(x) else 0)
+    return df
 
 
 # ── Full Advanced Analysis ────────────────────────────────────────────────────
@@ -64,38 +91,9 @@ async def run_full_analysis(
 ):
     """Run all advanced fairness methods on a dataset."""
     df = _load_df(req.dataset_id)
-
-    # Auto-detect outcome column
-    outcome_col = req.outcome_col
-    if not outcome_col:
-        from backend.core.fairness_engine import OUTCOME_PATTERNS
-        for col in df.columns:
-            if col.lower() in OUTCOME_PATTERNS:
-                outcome_col = col
-                break
-    if not outcome_col:
-        raise HTTPException(400, "Could not detect outcome column. Please specify outcome_col.")
-
-    # Auto-detect protected attributes
-    protected_cols = req.protected_cols or []
-    if not protected_cols:
-        from backend.core.fairness_engine import PROTECTED_CLASS_PATTERNS
-        for patterns in PROTECTED_CLASS_PATTERNS.values():
-            for pat in patterns:
-                if pat in df.columns:
-                    protected_cols.append(pat)
-                    break
-
-    if not protected_cols:
-        raise HTTPException(400, "No protected attribute columns found in dataset.")
-
-    # Encode outcome column to binary for analysis
-    df_work = df.copy()
-    approval_vals = {"approved", "originated", "loan originated", "1", "yes", "approve"}
-    if df_work[outcome_col].dtype == object:
-        df_work[outcome_col] = df_work[outcome_col].apply(
-            lambda x: 1 if str(x).lower().strip() in approval_vals else 0
-        )
+    outcome_col = _auto_outcome_col(df, req.outcome_col)
+    protected_cols = _auto_protected_cols(df, req.protected_cols)
+    df_work = _encode_outcome(df, outcome_col)
 
     report = _advanced.full_analysis(
         df=df_work,
@@ -161,13 +159,10 @@ class IntersectionalRequest(BaseModel):
 async def intersectional(req: IntersectionalRequest, current_user: User = Depends(get_current_user)):
     """Analyze fairness at the intersection of multiple protected attributes."""
     df = _load_df(req.dataset_id)
-    approval_vals = {"approved", "originated", "loan originated", "1", "yes"}
-    if df[req.outcome_col].dtype == object:
-        df[req.outcome_col] = df[req.outcome_col].apply(
-            lambda x: 1 if str(x).lower().strip() in approval_vals else 0
-        )
+    outcome_col = _auto_outcome_col(df, req.outcome_col)
+    df_work = _encode_outcome(df, outcome_col)
     result = _advanced.intersectional.analyze(
-        df, req.outcome_col, req.protected_cols, threshold=req.threshold
+        df_work, outcome_col, req.protected_cols, threshold=req.threshold
     )
     return result
 
