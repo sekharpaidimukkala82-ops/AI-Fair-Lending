@@ -229,10 +229,16 @@ async def upload_dataset(
 
     # Persist to DB
     owner_id = current_user.id if current_user else None
-    await create_dataset(db, file_id=file_id, filename=file.filename or "",
-                         original_filename=file.filename or "",
-                         file_size=len(content), owner_id=owner_id,
-                         storage_ref=storage_ref)
+    try:
+        await create_dataset(db, file_id=file_id, filename=file.filename or "",
+                             original_filename=file.filename or "",
+                             file_size=len(content), owner_id=owner_id,
+                             storage_ref=storage_ref)
+    except Exception:
+        # Fallback: storage_ref column may not exist yet in older DB schema
+        await create_dataset(db, file_id=file_id, filename=file.filename or "",
+                             original_filename=file.filename or "",
+                             file_size=len(content), owner_id=owner_id)
     if current_user:
         await log_action(db, "dataset.upload", user_id=current_user.id,
                          resource_type="dataset", resource_id=file_id,

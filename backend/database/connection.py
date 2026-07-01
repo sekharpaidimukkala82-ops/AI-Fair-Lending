@@ -1,6 +1,7 @@
 """Database connection and session management."""
 from __future__ import annotations
 import os
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from dotenv import load_dotenv
@@ -32,3 +33,8 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add new columns to existing tables (idempotent migrations)
+        try:
+            await conn.execute(text("ALTER TABLE datasets ADD COLUMN IF NOT EXISTS storage_ref TEXT"))
+        except Exception:
+            pass  # Column already exists or not PostgreSQL
