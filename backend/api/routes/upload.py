@@ -345,26 +345,8 @@ async def list_uploads(db: AsyncSession = Depends(get_db)):
                 "uploaded_at": datetime.utcnow().isoformat(),
             }
 
-    # 3. Disk scan for legacy files
-    try:
-        upload_dir = Path(Config.UPLOAD_DIR)
-        if upload_dir.exists():
-            for f in sorted(upload_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
-                if f.suffix.lower() in {".csv", ".xlsx", ".json"}:
-                    parts = f.name.split("_", 1)
-                    if len(parts) == 2:
-                        fid, orig = parts
-                        if fid not in uploads:
-                            mtime = f.stat().st_mtime
-                            uploads[fid] = {
-                                "file_id": fid,
-                                "filename": orig,
-                                "status": "completed",
-                                "file_size": f.stat().st_size,
-                                "uploaded_at": datetime.fromtimestamp(mtime).isoformat(),
-                            }
-    except Exception:
-        pass
+    # 3. Disk scan disabled — causes ghost entries after Clear All
+    # Files on disk without a DB record are treated as deleted
 
     return {"uploads": list(uploads.values()), "total": len(uploads)}
 

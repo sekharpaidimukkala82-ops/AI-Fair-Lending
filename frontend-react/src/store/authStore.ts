@@ -25,14 +25,23 @@ export const useAuthStore = create<AuthStore>()(
       token: null,
       isAuthenticated: false,
       setAuth: (user, token) => {
-        localStorage.setItem('access_token', token)
+        try { localStorage.setItem('access_token', token) } catch {}
         set({ user, token, isAuthenticated: true })
       },
       logout: () => {
-        localStorage.removeItem('access_token')
+        try { localStorage.removeItem('access_token') } catch {}
         set({ user: null, token: null, isAuthenticated: false })
       },
     }),
-    { name: 'fairlend-auth', partialize: (s) => ({ user: s.user, token: s.token, isAuthenticated: s.isAuthenticated }) }
+    {
+      name: 'fairlend-auth',
+      partialize: (s) => ({ user: s.user, token: s.token, isAuthenticated: s.isAuthenticated }),
+      // Handle localStorage unavailable (private mode, some mobile browsers)
+      storage: {
+        getItem: (name) => { try { return JSON.parse(localStorage.getItem(name) || 'null') } catch { return null } },
+        setItem: (name, value) => { try { localStorage.setItem(name, JSON.stringify(value)) } catch {} },
+        removeItem: (name) => { try { localStorage.removeItem(name) } catch {} },
+      },
+    }
   )
 )
