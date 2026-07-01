@@ -40,55 +40,95 @@ _dataset_field_maps: Dict[str, Dict[str, str]] = {}
 
 
 def _try_load_from_disk(dataset_id: str) -> Optional[pd.DataFrame]:
-    """Try to load a dataset from storage (Supabase or local disk)."""
+    """
+    Try to reload a dataset from local disk after a server restart.
+
+    Strategy (in order):
+    1. Look for a processed CSV saved alongside the original file
+       (written by _process_dataset_bg as <dataset_id>_processed.csv)
+    2. Scan uploads dir for any file starting with dataset_id and reprocess it
+    3. Try storage_ref from DB (local path or Supabase download)
+    """
+    import logging as _logging
+    _log = _logging.getLogger("fair_lending.fairness")
+
+    from backend.config import Config
+    upload_dir = Path(Config.UPLOAD_DIR)
+
+    def _read_and_process(file_path: Path) -> Optional[pd.DataFrame]:
+        try:
+            ext = file_path.suffix.lower()
+            if ext == ".csv":
+                df = pd.read_csv(file_path)
+            elif ext == ".xlsx":
+                df = pd.read_excel(file_path, engine="openpyxl")
+            elif ext == ".json":
+                df = pd.read_json(file_path)
+            else:
+                return None
+            # Re-apply data processor to normalize
+            from backend.core.data_processor import DataProcessor
+            df_clean, _ = DataProcessor().process(df)
+            _log.info(f"Reloaded dataset {dataset_id} from {file_path} ({len(df_clean)} rows)")
+            return df_clean
+        except Exception as e:
+            _log.warning(f"Failed to read {file_path}: {e}")
+            return None
+
+    # 1. Check for pre-saved processed CSV
+    processed_path = upload_dir / f"{dataset_id}_processed.csv"
+    if processed_path.exists():
+        try:
+            df = pd.read_csv(processed_path)
+            _log.info(f"Loaded processed CSV for {dataset_id}: {len(df)} rows")
+            return df
+        except Exception as e:
+            _log.warning(f"Failed to read processed CSV: {e}")
+
+    # 2. Scan uploads dir for original file
+    if upload_dir.exists():
+        for f in upload_dir.iterdir():
+            if f.name.startswith(dataset_id) and not f.name.endswith("_processed.csv"):
+                df = _read_and_process(f)
+                if df is not None:
+                    return df
+
+    # 3. Try storage_ref from DB (runs in a new event loop to avoid conflicts)
     try:
-        # First try: load from DB storage_ref (Supabase or local path)
-        from backend.database.connection import AsyncSessionLocal
-        from backend.database.crud import get_dataset_by_file_id
         from backend.core.storage import download_file as storage_download
         import asyncio
 
-        async def _get_ref():
-            async with AsyncSessionLocal() as db:
-                ds = await get_dataset_by_file_id(db, dataset_id)
-                return ds.storage_ref if ds else None
+        # Use run_in_executor pattern to avoid event loop conflicts
+        import concurrent.futures
 
-        try:
-            loop = asyncio.get_event_loop()
-            storage_ref = loop.run_until_complete(_get_ref())
-        except Exception:
-            storage_ref = None
+        def _get_storage_ref_sync():
+            """Get storage_ref from DB synchronously."""
+            import asyncio as _asyncio
+            from backend.database.connection import AsyncSessionLocal
+            from backend.database.crud import get_dataset_by_file_id
+
+            async def _query():
+                async with AsyncSessionLocal() as db:
+                    ds = await get_dataset_by_file_id(db, dataset_id)
+                    return ds.storage_ref if ds else None
+
+            loop = _asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_query())
+            finally:
+                loop.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_get_storage_ref_sync)
+            storage_ref = future.result(timeout=5)
 
         if storage_ref:
-            local_path = storage_download(storage_ref, dataset_id)
+            local_path = storage_download(storage_ref)
             if local_path:
-                ext = Path(local_path).suffix.lower()
-                if ext == ".csv":    df = pd.read_csv(local_path)
-                elif ext == ".xlsx": df = pd.read_excel(local_path, engine="openpyxl")
-                elif ext == ".json": df = pd.read_json(local_path)
-                if df is not None:
-                    from backend.core.data_processor import DataProcessor
-                    df, _ = DataProcessor().process(df)
-                    return df
-
-        # Fallback: scan local uploads directory
-        from backend.config import Config
-        upload_dir = Path(Config.UPLOAD_DIR)
-        if not upload_dir.exists():
-            return None
-        for f in upload_dir.iterdir():
-            if f.name.startswith(dataset_id):
-                ext = f.suffix.lower()
-                if ext == ".csv":    df = pd.read_csv(f)
-                elif ext == ".xlsx": df = pd.read_excel(f, engine="openpyxl")
-                elif ext == ".json": df = pd.read_json(f)
-                if df is not None:
-                    from backend.core.data_processor import DataProcessor
-                    df, _ = DataProcessor().process(df)
-                    return df
+                return _read_and_process(Path(local_path))
     except Exception as e:
-        import logging
-        logging.getLogger("fair_lending.fairness").warning(f"Could not load dataset {dataset_id} from storage: {e}")
+        _log.warning(f"Could not load dataset {dataset_id} from DB/storage: {e}")
+
     return None
 
 

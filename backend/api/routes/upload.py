@@ -136,6 +136,14 @@ async def _process_dataset_bg(file_id: str, file_path: str, filename: str) -> No
         _upload_status[file_id].update(completed_data)
         await _persist_completed(file_id, completed_data)
 
+        # Save processed CSV to disk so it can be reloaded after server restart
+        try:
+            processed_path = Config.get_upload_path(f"{file_id}_processed.csv")
+            df_clean.to_csv(processed_path, index=False)
+            logger.info(f"[{file_id}] Processed CSV saved to {processed_path}")
+        except Exception as e:
+            logger.warning(f"[{file_id}] Could not save processed CSV (non-fatal): {e}")
+
         # Bridge: register the cleaned dataset in the fairness module
         try:
             from backend.api.routes import fairness as fairness_route
@@ -375,6 +383,25 @@ async def delete_all_datasets(
                 pass
         await db.commit()
         _upload_status.clear()
+
+        # Delete all files in uploads dir (original + processed CSVs)
+        try:
+            upload_dir = Path(Config.UPLOAD_DIR)
+            if upload_dir.exists():
+                for f in upload_dir.iterdir():
+                    if f.is_file():
+                        f.unlink(missing_ok=True)
+        except Exception as e:
+            logger.warning(f"Could not clear uploads dir: {e}")
+
+        # Clear in-memory fairness cache
+        try:
+            from backend.api.routes import fairness as fairness_route
+            fairness_route._datasets.clear()
+            fairness_route._dataset_field_maps.clear()
+        except Exception:
+            pass
+
         try:
             vs = VectorStore()
             vs.delete_collection()
