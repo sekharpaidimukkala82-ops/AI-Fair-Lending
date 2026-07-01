@@ -172,7 +172,9 @@ from backend.api.routes import upload_v2
 from backend.api.routes import advanced_fairness, cases, compliance
 
 app.include_router(upload.router,       prefix="/api/v1")
-app.include_router(upload_v2.router,    prefix="/api/v1")   # v2: Celery + DB + WebSocket
+# upload_v2 only provides extra routes (status by file_id, datasets list, delete)
+# POST /upload/dataset is handled by upload.py above — no duplicate
+app.include_router(upload_v2.router,    prefix="/api/v1", include_in_schema=False)
 app.include_router(search.router,       prefix="/api/v1")
 app.include_router(chat.router,         prefix="/api/v1")
 app.include_router(fairness.router,     prefix="/api/v1")
