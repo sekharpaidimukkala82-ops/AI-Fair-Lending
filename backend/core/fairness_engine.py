@@ -318,14 +318,24 @@ class FairnessEngine:
         if not outcome_col:
             return indicators
 
+        # Filter neutral outcomes before analysis
+        NEUTRAL_OUTCOMES = {"withdrawn", "incomplete", "purchased", "file closed",
+                            "closed for incompleteness", "application withdrawn",
+                            "voluntarily withdrawn", "4", "5", "6"}
+        if outcome_col in df.columns:
+            mask = ~df[outcome_col].astype(str).str.strip().str.lower().isin(NEUTRAL_OUTCOMES)
+            df_work = df[mask] if mask.sum() >= 10 else df
+        else:
+            df_work = df
+
         threshold = Config.DISPARATE_IMPACT_THRESHOLD
-        cols_to_check = protected_columns or self._detect_all_protected_cols(df, field_map)
+        cols_to_check = protected_columns or self._detect_all_protected_cols(df_work, field_map)
 
         for field_name, col in cols_to_check.items():
-            if col not in df.columns:
+            if col not in df_work.columns:
                 continue
             group_rates = self.compute_approval_rates_by_group(
-                df, col, outcome_col, field_name=field_name
+                df_work, col, outcome_col, field_name=field_name
             )
             if len(group_rates) < 2:
                 continue
@@ -403,17 +413,21 @@ class FairnessEngine:
         approval_rates_by_group: Dict[str, Dict[str, float]] = {}
 
         # Filter to only decisive outcomes (Approved/Denied) for accurate DI analysis
-        # Withdrawn/Incomplete applications are excluded as they were not actually decided
-        decisive_vals = {"approved", "denied", "originated", "loan originated",
-                         "approved but not accepted", "preapproval approved", "preapproval denied",
-                         "1", "2", "3", "7", "8"}
+        # Withdrawn/Incomplete/Purchased applications were not actually decided — exclude them
+        # This is the CFPB standard: only compare approved vs denied applications
+        NEUTRAL_OUTCOMES = {
+            "withdrawn", "incomplete", "purchased", "file closed",
+            "closed for incompleteness", "application withdrawn",
+            "voluntarily withdrawn", "4", "5", "6",  # HMDA codes
+        }
+
+        df_decisive = df
         if outcome_col and outcome_col in df.columns:
-            df_decisive = df[df[outcome_col].astype(str).str.strip().str.lower().isin(decisive_vals)].copy()
-            if len(df_decisive) < 10:
-                # Not enough decisive outcomes — fall back to full dataset
-                df_decisive = df
-        else:
-            df_decisive = df
+            mask = ~df[outcome_col].astype(str).str.strip().str.lower().isin(NEUTRAL_OUTCOMES)
+            df_filtered = df[mask]
+            # Only use filtered data if we have enough records
+            if len(df_filtered) >= 10:
+                df_decisive = df_filtered
 
         for field_name, col in cols_to_check.items():
             if col not in df_decisive.columns or outcome_col is None:
