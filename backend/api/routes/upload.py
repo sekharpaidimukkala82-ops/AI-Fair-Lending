@@ -377,15 +377,20 @@ async def delete_all_datasets(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Delete all dataset records (admin cleanup)."""
-    from sqlalchemy import delete as sql_delete, text
-    from backend.database.models import Dataset
+    """Delete all dataset records (admin cleanup) — cascades dependents."""
+    from sqlalchemy import delete as sql_delete
+    from backend.database.models import (Dataset, FairnessAudit, MLModel, Report,
+                                          AuditLog, Case, CaseComment, DataLineage, ScheduledAudit)
     try:
-        await db.execute(sql_delete(Dataset))
+        # Delete in dependency order
+        for model in [CaseComment, Case, DataLineage, ScheduledAudit,
+                      FairnessAudit, MLModel, Report, AuditLog, Dataset]:
+            try:
+                await db.execute(sql_delete(model))
+            except Exception:
+                pass
         await db.commit()
-        # Clear in-memory status
         _upload_status.clear()
-        # Clear vector store
         try:
             vs = VectorStore()
             vs.delete_collection()
