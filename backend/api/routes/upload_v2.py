@@ -88,8 +88,15 @@ async def _fallback_process_bg(file_id: str, file_path: str, filename: str) -> N
             await update_dataset_status(db, file_id, "processing")
             await db.commit()
 
-        # Read file
-        df = _read_dataframe(file_path, filename)
+        # Read file — handle both local paths and supabase:// refs
+        if file_path.startswith("supabase://"):
+            from backend.core.storage import download_file as storage_download
+            local_path = storage_download(file_path, filename)
+            if not local_path:
+                raise ValueError(f"Could not download file from storage: {file_path}")
+            df = _read_dataframe(local_path, filename)
+        else:
+            df = _read_dataframe(file_path, filename)
         logger.info(f"[{file_id}] Read {len(df)} rows")
         # Schema discovery
         sd = SchemaDiscovery()
@@ -188,22 +195,11 @@ async def upload_dataset(
 
     file_id = str(uuid.uuid4())
     safe_name = f"{file_id}_{file.filename}"
-    save_path = Config.get_upload_path(safe_name)
 
-    # Ensure upload dir exists
-    save_path.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        async with aiofiles.open(save_path, "wb") as f:
-            await f.write(content)
-    except Exception as e:
-        logger.warning(f"Could not save file to disk: {e} — processing from memory")
-        # Save to temp location as fallback
-        import tempfile, os
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}")
-        tmp.write(content)
-        tmp.close()
-        save_path = Path(tmp.name)
+    # Use storage abstraction (Supabase in prod, local disk in dev)
+    from backend.core.storage import upload_file as storage_upload
+    storage_ref = storage_upload(content, file.filename or "upload", file_id)
+    save_path = Path(storage_ref) if not storage_ref.startswith("supabase://") else Path(storage_ref)
 
     owner_id = current_user.id if current_user else None
     dataset = await _create_dataset_record(

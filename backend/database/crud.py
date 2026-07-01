@@ -39,9 +39,10 @@ async def list_users(db: AsyncSession) -> List[User]:
 # ---- Datasets ----
 async def create_dataset(db: AsyncSession, file_id: str, filename: str,
                          original_filename: str, file_size: int,
-                         owner_id: Optional[str] = None) -> Dataset:
+                         owner_id: Optional[str] = None,
+                         storage_ref: Optional[str] = None) -> Dataset:
     ds = Dataset(file_id=file_id, filename=filename, original_filename=original_filename,
-                 file_size=file_size, owner_id=owner_id)
+                 file_size=file_size, owner_id=owner_id, storage_ref=storage_ref)
     db.add(ds)
     await db.flush()
     return ds

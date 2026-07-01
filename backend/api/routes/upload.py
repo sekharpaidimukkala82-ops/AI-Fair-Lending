@@ -97,8 +97,7 @@ async def _process_dataset_bg(file_id: str, file_path: str, filename: str) -> No
         logger.info(f"[{file_id}] Processing: {filename}")
         _upload_status[file_id]["status"] = "processing"
 
-        df = _read_dataframe(file_path, filename)
-        discovery = sd.generate_discovery_report(df)
+        df = _read_dataframe(file_path, filename)        discovery = sd.generate_discovery_report(df)
         df_clean, proc_report = dp.process(df, discovery.field_mappings)
         narratives = ng.generate_batch(df_clean, discovery.field_mappings)
 
@@ -221,27 +220,18 @@ async def upload_dataset(
 
     file_id = str(uuid.uuid4())
     safe_name = f"{file_id}_{file.filename}"
-    save_path = str(Config.get_upload_path(safe_name))
 
-    # Ensure upload dir exists
-    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        async with aiofiles.open(save_path, "wb") as f:
-            await f.write(content)
-    except Exception as e:
-        logger.warning(f"Could not save to uploads dir: {e} — using temp file")
-        import tempfile
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}")
-        tmp.write(content)
-        tmp.close()
-        save_path = tmp.name
+    # Use storage abstraction (Supabase in prod, local disk in dev)
+    from backend.core.storage import upload_file as storage_upload
+    storage_ref = storage_upload(content, file.filename or "upload", file_id)
+    save_path = storage_ref  # may be supabase:// or local path
 
     # Persist to DB
     owner_id = current_user.id if current_user else None
     await create_dataset(db, file_id=file_id, filename=file.filename or "",
                          original_filename=file.filename or "",
-                         file_size=len(content), owner_id=owner_id)
+                         file_size=len(content), owner_id=owner_id,
+                         storage_ref=storage_ref)
     if current_user:
         await log_action(db, "dataset.upload", user_id=current_user.id,
                          resource_type="dataset", resource_id=file_id,

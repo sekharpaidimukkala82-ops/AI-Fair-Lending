@@ -235,9 +235,10 @@ class DatasetProfiler:
             return True
         if v == "1":
             return False
-        # Normalized text
+        # Normalized text — handles Approved, approved, APPROVED, Originated, etc.
         return v in {"approved", "originated", "loan originated",
-                     "approved but not accepted", "funded", "preapproval approved"}
+                     "approved but not accepted", "funded", "preapproval approved",
+                     "approve", "yes", "accepted", "closed", "true", "1.0"}
 
     def get_strategic_sample(self, df: pd.DataFrame) -> pd.DataFrame:
         """

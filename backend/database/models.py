@@ -59,6 +59,7 @@ class Dataset(Base):
     field_mappings: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     schema_discovery: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    storage_ref: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # supabase:// or local path
     owner_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

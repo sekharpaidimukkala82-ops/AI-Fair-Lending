@@ -40,25 +40,47 @@ _dataset_field_maps: Dict[str, Dict[str, str]] = {}
 
 
 def _try_load_from_disk(dataset_id: str) -> Optional[pd.DataFrame]:
-    """Try to load a dataset from the uploads directory by scanning for matching file_id prefix."""
+    """Try to load a dataset from storage (Supabase or local disk)."""
     try:
+        # First try: load from DB storage_ref (Supabase or local path)
+        from backend.database.connection import AsyncSessionLocal
+        from backend.database.crud import get_dataset_by_file_id
+        from backend.core.storage import download_file as storage_download
+        import asyncio
+
+        async def _get_ref():
+            async with AsyncSessionLocal() as db:
+                ds = await get_dataset_by_file_id(db, dataset_id)
+                return ds.storage_ref if ds else None
+
+        try:
+            loop = asyncio.get_event_loop()
+            storage_ref = loop.run_until_complete(_get_ref())
+        except Exception:
+            storage_ref = None
+
+        if storage_ref:
+            local_path = storage_download(storage_ref, dataset_id)
+            if local_path:
+                ext = Path(local_path).suffix.lower()
+                if ext == ".csv":    return pd.read_csv(local_path)
+                elif ext == ".xlsx": return pd.read_excel(local_path, engine="openpyxl")
+                elif ext == ".json": return pd.read_json(local_path)
+
+        # Fallback: scan local uploads directory
         from backend.config import Config
         upload_dir = Path(Config.UPLOAD_DIR)
         if not upload_dir.exists():
             return None
-        # Files are saved as {file_id}_{original_filename}
         for f in upload_dir.iterdir():
             if f.name.startswith(dataset_id):
                 ext = f.suffix.lower()
-                if ext == ".csv":
-                    return pd.read_csv(f)
-                elif ext == ".xlsx":
-                    return pd.read_excel(f, engine="openpyxl")
-                elif ext == ".json":
-                    return pd.read_json(f)
+                if ext == ".csv":    return pd.read_csv(f)
+                elif ext == ".xlsx": return pd.read_excel(f, engine="openpyxl")
+                elif ext == ".json": return pd.read_json(f)
     except Exception as e:
         import logging
-        logging.getLogger("fair_lending.fairness").warning(f"Could not load dataset {dataset_id} from disk: {e}")
+        logging.getLogger("fair_lending.fairness").warning(f"Could not load dataset {dataset_id} from storage: {e}")
     return None
 
 
