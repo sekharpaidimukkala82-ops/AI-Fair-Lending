@@ -104,37 +104,71 @@ class FairnessEngine:
         Find the outcome/decision column in any dataset.
         Strategy:
         1. Use field_map if provided
-        2. Exact name match against known patterns
-        3. Partial keyword match
+        2. Exact name match against known patterns (validated)
+        3. Partial keyword match (validated)
         4. Heuristic: binary/low-cardinality column with approval-like values
+        A column is only accepted if it actually contains approval/denial signals.
         """
         if field_map and "decision" in field_map:
             col = field_map["decision"]
             if col in df.columns:
                 return col
 
+        # Columns to skip — these are never outcomes
+        SKIP_COLS = {
+            "activity_year", "year", "census_tract", "tract", "lei",
+            "respondent_id", "sequence_number", "id", "msa_md",
+            "state_code", "county_code", "zip_code", "loan_id",
+            "application_date", "date",
+        }
+
+        approval_signals = {
+            "approved", "originated", "funded", "yes", "true", "pass",
+            "denied", "rejected", "declined", "no", "false", "fail",
+            "1", "0",  # binary only if other signals present
+        }
+        hmda_outcome_vals = {"1", "2", "3", "4", "5", "6", "7", "8"}
+
+        def _col_has_outcome_values(col: str) -> bool:
+            """Return True if this column contains approval/denial-like values."""
+            cl = col.lower().strip()
+            if cl in SKIP_COLS:
+                return False
+            vals = set(df[col].dropna().astype(str).str.strip().str.lower().unique())
+            if not vals:
+                return False
+            # HMDA action_taken codes: must include both approvals (1/2/8) and denials (3/7)
+            if vals.issubset(hmda_outcome_vals):
+                return bool(vals & {"1", "2", "8"}) and bool(vals & {"3", "7"})
+            # Text signals: must include at least one approval AND one denial word
+            approvals = {"approved", "originated", "funded", "yes", "true", "pass", "1"}
+            denials = {"denied", "rejected", "declined", "no", "false", "fail", "0"}
+            has_approval = bool(vals & approvals)
+            has_denial = bool(vals & denials)
+            return has_approval and has_denial
+
         cols_lower = {c: c.lower().strip() for c in df.columns}
 
-        # Exact match
+        # Exact name match — validated
         for col, cl in cols_lower.items():
-            if cl in OUTCOME_PATTERNS:
+            if cl in OUTCOME_PATTERNS and _col_has_outcome_values(col):
                 return col
 
-        # Partial keyword match
+        # Partial keyword match — validated
         for col, cl in cols_lower.items():
-            if any(kw in cl for kw in OUTCOME_KEYWORDS):
+            if cl in SKIP_COLS:
+                continue
+            if any(kw in cl for kw in OUTCOME_KEYWORDS) and _col_has_outcome_values(col):
                 return col
 
-        # Heuristic: find a low-cardinality column with approval/denial-like values
-        approval_signals = {
-            "approved", "originated", "funded", "yes", "1", "true", "pass",
-            "denied", "rejected", "declined", "no", "0", "false", "fail",
-        }
+        # Heuristic: low-cardinality column with approval/denial signals
         for col in df.columns:
+            cl = col.lower().strip()
+            if cl in SKIP_COLS:
+                continue
             vals = df[col].dropna().astype(str).str.strip().str.lower().unique()
-            if 2 <= len(vals) <= 10:
-                if any(v in approval_signals for v in vals):
-                    return col
+            if 2 <= len(vals) <= 10 and _col_has_outcome_values(col):
+                return col
 
         return None
 
