@@ -219,7 +219,27 @@ export default function UploadPage() {
 
       {/* Datasets table */}
       <div>
-        <h2 className="text-lg font-semibold text-gray-800 mb-3">All Datasets ({uploads.length})</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-800">All Datasets ({uploads.length})</h2>
+          {uploads.length > 0 && (
+            <button
+              onClick={async () => {
+                if (!confirm('Delete all datasets? This cannot be undone.')) return
+                try {
+                  await api.delete('/upload/all')
+                  toast.success('All datasets cleared')
+                  queryClient.invalidateQueries({ queryKey: ['uploads-all'] })
+                  queryClient.invalidateQueries({ queryKey: ['datasets'] })
+                } catch {
+                  toast.error('Failed to clear datasets')
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs text-red-600 border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <XCircle className="w-3.5 h-3.5" /> Clear All
+            </button>
+          )}
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />

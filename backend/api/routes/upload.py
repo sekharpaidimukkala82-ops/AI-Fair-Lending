@@ -370,3 +370,27 @@ async def list_uploads(db: AsyncSession = Depends(get_db)):
         pass
 
     return {"uploads": list(uploads.values()), "total": len(uploads)}
+
+
+@router.delete("/all", response_model=StatusResponse)
+async def delete_all_datasets(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Delete all dataset records (admin cleanup)."""
+    from sqlalchemy import delete as sql_delete, text
+    from backend.database.models import Dataset
+    try:
+        await db.execute(sql_delete(Dataset))
+        await db.commit()
+        # Clear in-memory status
+        _upload_status.clear()
+        # Clear vector store
+        try:
+            vs = VectorStore()
+            vs.delete_collection()
+        except Exception:
+            pass
+        return StatusResponse(status="cleared", message="All datasets deleted successfully.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear datasets: {e}")
