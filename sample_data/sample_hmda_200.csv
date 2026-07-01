@@ -1,0 +1,201 @@
+application_id,state,race,ethnicity,gender,age,income,loan_amount,credit_score,debt_ratio,loan_purpose,action_taken
+APP0001,AZ,Native American,Non-Hispanic,Female,46,73126,433193,723,46.0,Home Purchase,Incomplete
+APP0002,MS,Native American,Hispanic,Female,56,104633,117505,722,33.9,Refinance,Approved
+APP0003,CA,Black,Non-Hispanic,Female,31,69765,168497,684,18.1,Home Purchase,Approved
+APP0004,CA,White,Non-Hispanic,Male,21,72381,124484,685,24.3,Home Purchase,Withdrawn
+APP0005,MS,Asian,Non-Hispanic,Male,28,95061,100082,672,45.9,Refinance,Denied
+APP0006,AZ,Native American,Non-Hispanic,Female,70,125225,438079,738,39.4,Home Purchase,Withdrawn
+APP0007,MI,Asian,Non-Hispanic,Male,52,56880,158079,643,50.8,Home Improvement,Withdrawn
+APP0008,AZ,Black,Non-Hispanic,Male,54,100145,363233,685,29.6,Home Improvement,Withdrawn
+APP0009,MS,Asian,Hispanic,Female,24,116839,255492,606,17.8,Home Improvement,Approved
+APP0010,CA,Black,Non-Hispanic,Male,30,100226,556223,654,16.7,Refinance,Denied
+APP0011,CA,Black,Hispanic,Female,22,74111,329226,802,45.1,Home Purchase,Approved
+APP0012,MS,White,Non-Hispanic,Female,60,54407,226316,712,54.3,Home Purchase,Withdrawn
+APP0013,MI,White,Non-Hispanic,Male,25,98918,315301,660,48.1,Refinance,Approved
+APP0014,CA,Black,Non-Hispanic,Male,65,89048,540354,661,18.8,Refinance,Withdrawn
+APP0015,AZ,White,Non-Hispanic,Male,67,34053,574714,817,52.3,Home Improvement,Incomplete
+APP0016,MS,Black,Hispanic,Male,30,114382,490819,669,22.6,Home Purchase,Approved
+APP0017,CA,Black,Hispanic,Female,67,126672,548022,590,41.1,Home Purchase,Withdrawn
+APP0018,AZ,Black,Non-Hispanic,Female,65,36275,306647,670,51.4,Refinance,Denied
+APP0019,MS,Asian,Non-Hispanic,Female,36,41715,202304,816,23.9,Home Improvement,Incomplete
+APP0020,MI,Black,Hispanic,Male,47,98231,402511,610,52.7,Refinance,Incomplete
+APP0021,MI,White,Hispanic,Female,47,123071,285935,698,54.1,Home Improvement,Incomplete
+APP0022,MI,White,Non-Hispanic,Male,26,69286,390434,603,27.0,Home Purchase,Denied
+APP0023,CA,Black,Non-Hispanic,Male,69,37821,307231,713,33.2,Home Purchase,Incomplete
+APP0024,MI,White,Hispanic,Male,25,147494,152150,702,22.6,Refinance,Denied
+APP0025,AZ,White,Hispanic,Female,25,116723,209838,808,41.7,Refinance,Withdrawn
+APP0026,CA,Black,Hispanic,Female,67,49247,364047,622,26.9,Home Improvement,Withdrawn
+APP0027,MS,Native American,Non-Hispanic,Female,60,121327,301541,781,49.3,Home Purchase,Withdrawn
+APP0028,MS,Native American,Non-Hispanic,Male,23,118602,553333,806,18.7,Refinance,Withdrawn
+APP0029,CA,Black,Non-Hispanic,Male,58,75490,578215,747,34.9,Home Improvement,Denied
+APP0030,CA,Native American,Hispanic,Male,62,145687,342357,587,40.7,Home Improvement,Approved
+APP0031,MS,Black,Hispanic,Male,34,48796,170979,653,35.7,Home Purchase,Withdrawn
+APP0032,MI,Black,Non-Hispanic,Female,27,37695,530970,775,25.3,Home Purchase,Withdrawn
+APP0033,MS,Native American,Non-Hispanic,Male,36,53042,138890,693,44.4,Home Improvement,Approved
+APP0034,MI,Black,Non-Hispanic,Male,61,78339,575746,603,54.8,Home Purchase,Approved
+APP0035,MI,Asian,Non-Hispanic,Female,42,42382,579065,613,28.8,Home Purchase,Denied
+APP0036,MS,Black,Hispanic,Female,62,146912,321617,758,17.4,Refinance,Approved
+APP0037,CA,Asian,Hispanic,Female,36,59461,121054,778,27.1,Home Purchase,Approved
+APP0038,AZ,White,Hispanic,Male,34,123363,235597,633,43.5,Refinance,Incomplete
+APP0039,MI,Native American,Hispanic,Male,62,125078,526553,792,17.7,Home Improvement,Approved
+APP0040,MI,White,Non-Hispanic,Male,37,57423,152891,651,25.9,Home Improvement,Incomplete
+APP0041,MI,White,Hispanic,Female,68,57792,315584,736,40.1,Refinance,Withdrawn
+APP0042,MS,Asian,Hispanic,Female,64,98808,88053,682,50.6,Refinance,Withdrawn
+APP0043,AZ,Native American,Non-Hispanic,Male,69,43784,397195,784,48.0,Home Purchase,Withdrawn
+APP0044,MS,Native American,Hispanic,Male,48,107862,427925,621,26.9,Refinance,Approved
+APP0045,CA,Asian,Hispanic,Male,51,116630,374903,689,21.5,Home Improvement,Withdrawn
+APP0046,AZ,Asian,Non-Hispanic,Male,22,149643,465130,702,54.9,Home Purchase,Approved
+APP0047,MI,Native American,Hispanic,Male,56,131431,78538,788,33.9,Home Purchase,Incomplete
+APP0048,MI,Black,Hispanic,Male,41,130058,445995,752,41.7,Home Improvement,Incomplete
+APP0049,AZ,Native American,Non-Hispanic,Female,33,52645,252671,714,27.5,Home Improvement,Approved
+APP0050,AZ,Black,Non-Hispanic,Male,25,101615,221320,766,36.1,Home Purchase,Incomplete
+APP0051,MS,Black,Hispanic,Male,25,91798,356255,813,49.4,Home Purchase,Approved
+APP0052,AZ,Asian,Hispanic,Male,54,62837,428395,642,42.7,Home Purchase,Denied
+APP0053,AZ,Native American,Hispanic,Male,67,139573,257085,794,37.6,Refinance,Approved
+APP0054,CA,Native American,Hispanic,Female,57,107736,435497,667,20.3,Refinance,Denied
+APP0055,AZ,Black,Hispanic,Female,27,135042,483344,684,28.0,Refinance,Denied
+APP0056,CA,Black,Hispanic,Female,63,139286,293729,598,46.7,Home Purchase,Incomplete
+APP0057,MI,Black,Non-Hispanic,Female,33,83135,89117,669,33.1,Home Improvement,Approved
+APP0058,MS,Asian,Hispanic,Female,29,59813,584400,679,32.2,Home Improvement,Withdrawn
+APP0059,AZ,Asian,Non-Hispanic,Male,38,87298,209067,704,36.7,Refinance,Incomplete
+APP0060,CA,Black,Hispanic,Female,52,144437,300987,780,20.6,Home Purchase,Approved
+APP0061,MI,Black,Hispanic,Female,34,44254,304428,676,17.9,Home Purchase,Approved
+APP0062,CA,Native American,Hispanic,Female,23,48338,420227,598,25.6,Refinance,Denied
+APP0063,AZ,Black,Hispanic,Female,43,79913,580018,789,54.6,Home Purchase,Withdrawn
+APP0064,CA,Black,Hispanic,Female,57,48312,179658,789,44.9,Home Improvement,Denied
+APP0065,AZ,Asian,Hispanic,Male,40,56841,534979,594,39.6,Home Improvement,Incomplete
+APP0066,CA,Black,Hispanic,Female,35,113187,132948,638,29.6,Home Improvement,Denied
+APP0067,CA,Asian,Hispanic,Male,34,46101,593922,677,37.2,Refinance,Approved
+APP0068,MS,Asian,Non-Hispanic,Male,39,78924,596407,618,35.1,Home Purchase,Denied
+APP0069,MS,Black,Non-Hispanic,Male,51,145313,313117,655,48.7,Home Purchase,Incomplete
+APP0070,MI,Black,Hispanic,Female,40,135443,424992,714,29.4,Refinance,Denied
+APP0071,MS,Native American,Non-Hispanic,Male,66,104491,453753,773,27.9,Refinance,Incomplete
+APP0072,MS,Native American,Non-Hispanic,Male,25,142770,247310,785,30.5,Refinance,Withdrawn
+APP0073,MS,Black,Non-Hispanic,Female,27,62840,557765,780,26.5,Home Purchase,Denied
+APP0074,CA,Asian,Hispanic,Female,67,84514,171412,710,24.0,Home Improvement,Denied
+APP0075,MS,White,Non-Hispanic,Female,59,113843,584765,733,38.2,Refinance,Withdrawn
+APP0076,CA,White,Hispanic,Female,66,122952,381829,695,36.2,Home Purchase,Denied
+APP0077,MI,White,Hispanic,Male,61,124874,217284,807,43.8,Home Purchase,Withdrawn
+APP0078,MS,White,Non-Hispanic,Male,56,127778,226333,629,45.8,Home Improvement,Incomplete
+APP0079,MI,Asian,Non-Hispanic,Male,60,114532,284526,632,49.7,Home Improvement,Incomplete
+APP0080,MI,Black,Non-Hispanic,Female,44,36660,500637,674,35.1,Home Improvement,Denied
+APP0081,MI,Black,Hispanic,Female,21,40084,64246,734,48.3,Refinance,Withdrawn
+APP0082,AZ,Asian,Hispanic,Female,49,136917,469124,695,19.1,Home Improvement,Withdrawn
+APP0083,MI,Native American,Non-Hispanic,Male,28,37010,244723,626,36.0,Home Purchase,Denied
+APP0084,MS,Asian,Hispanic,Male,50,60900,556101,696,31.6,Home Purchase,Approved
+APP0085,CA,Asian,Hispanic,Male,45,51670,57509,779,15.4,Home Purchase,Approved
+APP0086,AZ,Native American,Hispanic,Female,69,128069,97247,797,28.5,Home Purchase,Denied
+APP0087,MI,White,Non-Hispanic,Female,48,107236,101159,660,53.2,Refinance,Denied
+APP0088,AZ,Native American,Non-Hispanic,Male,25,67848,546806,758,30.4,Home Improvement,Denied
+APP0089,MI,White,Non-Hispanic,Female,53,120255,127029,737,35.5,Home Improvement,Incomplete
+APP0090,MS,Native American,Non-Hispanic,Female,44,41812,479927,783,19.6,Home Improvement,Incomplete
+APP0091,AZ,Native American,Hispanic,Male,24,127736,430501,616,39.5,Home Improvement,Incomplete
+APP0092,CA,Native American,Non-Hispanic,Female,38,45994,323887,705,48.0,Home Purchase,Approved
+APP0093,MI,Black,Hispanic,Female,63,91184,385965,817,29.4,Home Purchase,Denied
+APP0094,AZ,Native American,Non-Hispanic,Female,30,129794,371298,669,52.7,Home Purchase,Denied
+APP0095,AZ,Asian,Hispanic,Female,38,43638,398249,789,49.9,Refinance,Incomplete
+APP0096,CA,Black,Hispanic,Male,24,35096,302690,645,20.0,Refinance,Withdrawn
+APP0097,MS,White,Non-Hispanic,Female,39,148651,385826,619,48.2,Refinance,Approved
+APP0098,MI,Native American,Non-Hispanic,Male,70,79461,442432,678,28.2,Refinance,Approved
+APP0099,AZ,White,Hispanic,Male,40,41409,149563,712,45.1,Home Improvement,Incomplete
+APP0100,CA,White,Hispanic,Male,28,126483,388019,688,39.4,Home Improvement,Incomplete
+APP0101,AZ,Black,Hispanic,Male,70,32746,90650,639,16.4,Refinance,Approved
+APP0102,MS,Black,Non-Hispanic,Male,28,32462,185449,646,34.3,Home Improvement,Denied
+APP0103,MS,Asian,Non-Hispanic,Male,60,73117,479318,594,26.4,Home Purchase,Withdrawn
+APP0104,MS,Native American,Non-Hispanic,Male,67,50436,234047,588,29.3,Refinance,Incomplete
+APP0105,AZ,Native American,Non-Hispanic,Female,42,39717,304985,627,23.3,Home Purchase,Approved
+APP0106,MI,Native American,Non-Hispanic,Male,38,131968,499044,779,35.1,Refinance,Incomplete
+APP0107,AZ,White,Hispanic,Female,66,41694,583994,612,30.2,Home Improvement,Incomplete
+APP0108,MS,Black,Non-Hispanic,Male,40,96267,595685,710,17.5,Refinance,Incomplete
+APP0109,AZ,White,Hispanic,Male,53,64363,499102,665,37.0,Home Improvement,Denied
+APP0110,MS,Black,Non-Hispanic,Male,40,113767,416939,642,43.7,Refinance,Approved
+APP0111,AZ,Black,Non-Hispanic,Female,49,89640,309597,633,33.6,Home Improvement,Incomplete
+APP0112,MI,Native American,Non-Hispanic,Female,23,77357,356395,747,45.4,Refinance,Withdrawn
+APP0113,CA,White,Non-Hispanic,Male,63,73560,111520,817,51.8,Home Purchase,Incomplete
+APP0114,MI,Asian,Hispanic,Male,50,72731,387020,673,54.5,Home Purchase,Incomplete
+APP0115,MS,Native American,Hispanic,Female,50,98402,581521,778,49.8,Home Purchase,Approved
+APP0116,AZ,Black,Non-Hispanic,Male,59,46353,145718,692,42.4,Home Purchase,Incomplete
+APP0117,AZ,Black,Hispanic,Male,21,70684,568170,699,37.6,Refinance,Approved
+APP0118,AZ,Black,Non-Hispanic,Male,68,43475,347391,745,36.8,Home Purchase,Approved
+APP0119,CA,Black,Non-Hispanic,Male,51,108953,438710,655,15.9,Home Improvement,Approved
+APP0120,MI,White,Non-Hispanic,Female,37,94021,418204,650,46.9,Home Improvement,Incomplete
+APP0121,MS,Native American,Non-Hispanic,Male,69,119166,158142,683,26.8,Home Purchase,Approved
+APP0122,MS,White,Hispanic,Female,48,143806,520169,614,25.8,Home Purchase,Denied
+APP0123,AZ,Black,Non-Hispanic,Male,39,140360,300034,790,29.8,Home Improvement,Denied
+APP0124,CA,Native American,Hispanic,Male,41,32896,258419,734,26.5,Refinance,Withdrawn
+APP0125,MS,Black,Hispanic,Male,43,65005,490801,624,42.1,Home Purchase,Withdrawn
+APP0126,MS,White,Hispanic,Female,43,52402,417967,741,50.1,Home Improvement,Denied
+APP0127,MS,Native American,Hispanic,Male,38,74284,263466,771,32.0,Refinance,Withdrawn
+APP0128,MI,White,Hispanic,Female,24,136301,321525,820,28.4,Home Improvement,Incomplete
+APP0129,MI,White,Hispanic,Female,23,126788,377297,777,16.5,Home Improvement,Incomplete
+APP0130,MS,Native American,Hispanic,Female,29,80021,418421,625,35.0,Home Improvement,Incomplete
+APP0131,MI,Native American,Hispanic,Male,26,44625,307054,722,33.0,Refinance,Denied
+APP0132,MS,White,Non-Hispanic,Male,64,78599,428266,732,43.9,Home Purchase,Denied
+APP0133,CA,White,Hispanic,Male,31,109219,348205,589,19.0,Home Purchase,Incomplete
+APP0134,AZ,Asian,Hispanic,Male,38,127364,289255,746,40.3,Home Purchase,Denied
+APP0135,MS,Black,Non-Hispanic,Female,27,144302,231003,743,34.3,Home Purchase,Denied
+APP0136,CA,Black,Hispanic,Male,54,34644,223403,700,20.4,Refinance,Approved
+APP0137,AZ,Black,Hispanic,Male,31,143811,395540,816,53.1,Home Improvement,Denied
+APP0138,MS,Black,Hispanic,Male,47,67672,167766,803,36.6,Refinance,Incomplete
+APP0139,MS,White,Non-Hispanic,Female,46,73949,243949,747,39.6,Home Improvement,Approved
+APP0140,AZ,White,Hispanic,Female,27,99062,300334,692,51.4,Refinance,Denied
+APP0141,MI,White,Non-Hispanic,Female,62,102610,240839,616,31.5,Home Improvement,Approved
+APP0142,MI,White,Non-Hispanic,Female,22,102878,181605,599,19.9,Home Improvement,Incomplete
+APP0143,AZ,Black,Hispanic,Male,24,104673,259792,688,25.7,Home Improvement,Approved
+APP0144,MS,White,Hispanic,Male,39,43833,87204,804,24.2,Refinance,Incomplete
+APP0145,MI,White,Non-Hispanic,Male,32,129842,152302,651,19.2,Home Purchase,Incomplete
+APP0146,AZ,White,Hispanic,Female,55,105209,300858,793,24.4,Home Improvement,Denied
+APP0147,AZ,White,Hispanic,Male,32,95568,178552,731,25.1,Home Purchase,Denied
+APP0148,MI,Native American,Hispanic,Female,29,76753,293442,641,24.3,Home Improvement,Denied
+APP0149,MS,White,Hispanic,Male,69,104509,599936,634,29.1,Refinance,Approved
+APP0150,MS,Black,Non-Hispanic,Male,41,81701,100364,766,45.2,Home Improvement,Denied
+APP0151,AZ,Black,Non-Hispanic,Male,46,106402,205808,706,23.8,Home Purchase,Incomplete
+APP0152,MI,Asian,Hispanic,Male,28,103724,96751,719,44.0,Home Improvement,Approved
+APP0153,MS,Native American,Non-Hispanic,Female,21,138207,187616,626,38.2,Home Improvement,Denied
+APP0154,CA,Asian,Hispanic,Male,66,76690,470901,644,31.9,Home Purchase,Incomplete
+APP0155,CA,White,Hispanic,Male,36,125548,245681,687,33.6,Home Improvement,Withdrawn
+APP0156,CA,White,Hispanic,Male,40,81429,201184,787,16.0,Home Improvement,Denied
+APP0157,CA,Black,Non-Hispanic,Male,42,88822,569574,749,19.0,Refinance,Withdrawn
+APP0158,MI,Black,Hispanic,Male,69,108466,577076,782,26.0,Home Improvement,Denied
+APP0159,AZ,Native American,Non-Hispanic,Female,29,97335,368517,613,16.6,Refinance,Approved
+APP0160,AZ,White,Non-Hispanic,Male,33,59335,440573,619,29.0,Home Improvement,Approved
+APP0161,AZ,Asian,Non-Hispanic,Female,62,37690,181072,743,23.6,Home Improvement,Withdrawn
+APP0162,CA,Native American,Non-Hispanic,Female,24,30340,153209,755,39.4,Refinance,Approved
+APP0163,CA,Asian,Non-Hispanic,Female,67,122474,142439,762,51.9,Refinance,Incomplete
+APP0164,AZ,Black,Non-Hispanic,Male,48,44866,494641,695,32.8,Refinance,Approved
+APP0165,AZ,White,Hispanic,Male,47,36390,476102,592,29.1,Home Improvement,Approved
+APP0166,CA,Black,Non-Hispanic,Female,43,36160,374326,688,44.1,Refinance,Denied
+APP0167,CA,Native American,Hispanic,Female,63,71417,556552,683,45.9,Home Purchase,Denied
+APP0168,AZ,White,Non-Hispanic,Female,43,134902,447433,624,18.0,Refinance,Approved
+APP0169,CA,White,Non-Hispanic,Male,21,94358,458608,682,49.6,Refinance,Approved
+APP0170,MS,Native American,Hispanic,Female,32,30397,321033,653,45.0,Refinance,Withdrawn
+APP0171,MI,Native American,Hispanic,Male,46,141969,344969,643,35.0,Home Improvement,Denied
+APP0172,AZ,Asian,Hispanic,Male,40,135849,89407,782,51.9,Home Improvement,Approved
+APP0173,MS,Native American,Hispanic,Female,46,122329,85441,664,28.1,Home Purchase,Incomplete
+APP0174,CA,White,Non-Hispanic,Male,68,148757,587376,807,42.2,Refinance,Denied
+APP0175,AZ,White,Hispanic,Female,21,148006,319308,804,29.3,Home Improvement,Incomplete
+APP0176,MS,White,Non-Hispanic,Male,69,63829,500058,771,50.2,Home Purchase,Denied
+APP0177,CA,Asian,Non-Hispanic,Female,36,72360,363812,672,37.2,Home Purchase,Approved
+APP0178,CA,Native American,Non-Hispanic,Female,60,59688,317867,677,38.6,Home Improvement,Denied
+APP0179,AZ,Black,Hispanic,Male,36,101814,376925,650,23.3,Home Purchase,Denied
+APP0180,CA,Asian,Hispanic,Female,40,78316,450290,739,24.7,Home Improvement,Incomplete
+APP0181,AZ,Asian,Non-Hispanic,Male,23,121094,131857,695,49.9,Refinance,Denied
+APP0182,AZ,White,Non-Hispanic,Female,47,49249,136195,682,34.4,Home Improvement,Incomplete
+APP0183,CA,Native American,Non-Hispanic,Female,61,50764,586879,798,40.2,Refinance,Approved
+APP0184,CA,Asian,Non-Hispanic,Female,35,104269,54845,795,45.8,Home Purchase,Incomplete
+APP0185,MS,Asian,Non-Hispanic,Female,46,57268,102795,585,38.7,Home Purchase,Approved
+APP0186,MI,Native American,Non-Hispanic,Male,30,116703,587893,625,51.0,Refinance,Withdrawn
+APP0187,MI,Asian,Hispanic,Male,32,77206,482538,645,33.5,Home Improvement,Denied
+APP0188,CA,Native American,Non-Hispanic,Male,31,67341,79835,612,44.4,Home Purchase,Incomplete
+APP0189,CA,White,Non-Hispanic,Female,21,143256,239210,717,36.9,Home Purchase,Incomplete
+APP0190,MS,Black,Non-Hispanic,Male,56,132178,491735,739,36.8,Home Improvement,Withdrawn
+APP0191,CA,Asian,Non-Hispanic,Female,35,139377,191385,654,19.9,Home Improvement,Approved
+APP0192,AZ,Native American,Hispanic,Male,49,130576,205048,692,15.1,Home Improvement,Denied
+APP0193,AZ,Native American,Non-Hispanic,Male,26,115933,89988,802,40.7,Home Improvement,Withdrawn
+APP0194,MI,Native American,Hispanic,Female,30,94342,240706,740,20.9,Home Purchase,Denied
+APP0195,CA,Native American,Non-Hispanic,Female,26,113395,171610,772,43.5,Refinance,Approved
+APP0196,MS,Native American,Hispanic,Male,68,51823,502592,693,47.6,Home Improvement,Approved
+APP0197,MI,Native American,Hispanic,Female,49,148865,447664,741,46.8,Refinance,Incomplete
+APP0198,MS,Native American,Non-Hispanic,Female,52,95546,264987,708,48.8,Refinance,Approved
+APP0199,AZ,Asian,Hispanic,Male,41,137018,571812,710,26.6,Home Purchase,Approved
+APP0200,MS,Black,Non-Hispanic,Female,28,102140,382025,627,41.5,Refinance,Incomplete
