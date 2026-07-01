@@ -1,6 +1,9 @@
 """
 Fairness Engine – disparate impact analysis, bias detection, and fair lending auditing.
-Supports HMDA official format, German Credit, Lending Club, and generic CSV datasets.
+
+Designed to work with ANY tabular dataset — not just HMDA.
+Auto-detects outcome columns and demographic columns using broad heuristics.
+Supports: HMDA, German Credit, Lending Club, Fannie/Freddie, and any generic CSV.
 """
 
 from __future__ import annotations
@@ -17,36 +20,68 @@ from backend.models.schemas import BiasIndicator, FairnessReport
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# Generic column detection patterns — broad enough for any dataset
 # ---------------------------------------------------------------------------
 
-# All possible protected class column patterns to check
+# Protected class patterns: ordered by priority (exact → partial)
 PROTECTED_CLASS_PATTERNS: Dict[str, List[str]] = {
-    "gender": ["applicant_sex", "derived_sex", "sex", "gender", "personal_status_sex",
-               "personal_status", "co_applicant_sex", "applicant_sex_name"],
-    "race":   ["applicant_race_1", "derived_race", "race", "applicant_race",
-               "race_1", "co_applicant_race_1", "applicant_race_name_1", "ethnicity"],
-    "age":    ["applicant_age", "age", "borrower_age", "applicant_age_above_62",
-               "age_group", "age_bracket"],
-    "ethnicity": ["applicant_ethnicity_1", "derived_ethnicity", "ethnicity",
-                  "applicant_ethnicity_name_1"],
+    "race": [
+        # HMDA official
+        "applicant_race_1", "derived_race", "applicant_race", "race_1",
+        "co_applicant_race_1", "applicant_race_name_1",
+        # Generic
+        "race", "ethnicity", "racial_group", "minority_status",
+        "borrower_race", "race_ethnicity", "demographic_race",
+    ],
+    "gender": [
+        # HMDA official
+        "applicant_sex", "derived_sex", "co_applicant_sex", "applicant_sex_name",
+        # Generic
+        "sex", "gender", "borrower_sex", "borrower_gender",
+        "personal_status_sex", "personal_status", "applicant_gender",
+    ],
+    "ethnicity": [
+        "applicant_ethnicity_1", "derived_ethnicity", "applicant_ethnicity_name_1",
+        "ethnicity", "hispanic", "national_origin",
+    ],
+    "age": [
+        "applicant_age", "borrower_age", "age", "age_group",
+        "age_bracket", "applicant_age_above_62", "age_band",
+    ],
 }
 
-# Keep PROTECTED_CLASSES as a flat list for backward compatibility with existing routes
+# Backward-compatible flat list
 PROTECTED_CLASSES = list(PROTECTED_CLASS_PATTERNS.keys())
 
+# Outcome column patterns — any of these signal a decision/approval column
 OUTCOME_PATTERNS: List[str] = [
-    "action_taken", "decision", "loan_status", "default",
-    "outcome", "class", "target", "label", "y",
-    "credit_risk", "approval_status", "application_status",
-    "action_taken_name", "loan_decision",
+    # Exact names
+    "action_taken", "decision", "loan_status", "default", "outcome",
+    "class", "target", "label", "y", "credit_risk", "approval_status",
+    "application_status", "action_taken_name", "loan_decision",
+    "approved", "status", "result", "approved_denied", "pass_fail",
+    "credit_decision", "underwriting_decision", "final_decision",
+    # Partial keywords (checked as substrings)
+]
+OUTCOME_KEYWORDS = [
+    "action_taken", "decision", "outcome", "default", "loan_status",
+    "target", "label", "approved", "denied", "status", "result",
+    "credit_risk", "pass_fail",
 ]
 
 SEVERITY_LEVELS = {
     "critical": 0.60,
     "high":     0.70,
     "medium":   0.80,
-    "low":      1.20,
+}
+
+# Values that indicate "not available" for a demographic field — skip these groups
+UNKNOWN_VALUES = {
+    "not provided", "not applicable", "no co-applicant",
+    "information not provided", "free form text only",
+    "race not available", "sex not available", "ethnicity not available",
+    "nan", "none", "", "na", "n/a", "unknown", "other",
+    "6", "7", "8",  # HMDA not-provided codes
 }
 
 _profiler = DatasetProfiler()
@@ -54,37 +89,58 @@ _profiler = DatasetProfiler()
 
 class FairnessEngine:
     """
-    Generic fair lending auditor. Handles:
-    - HMDA official LAR (numeric codes auto-translated)
-    - HMDA legacy (loan_amount_000s format)
-    - German Credit dataset
-    - Lending Club / Fannie Mae / Freddie Mac
-    - Any generic lending CSV
+    Generic fair lending auditor.
+    Works with any CSV — auto-detects outcome and demographic columns.
     """
 
     # ------------------------------------------------------------------
-    # Column Detection
+    # Outcome column detection
     # ------------------------------------------------------------------
 
     def _detect_outcome_col(
         self, df: pd.DataFrame, field_map: Optional[Dict[str, str]] = None
     ) -> Optional[str]:
+        """
+        Find the outcome/decision column in any dataset.
+        Strategy:
+        1. Use field_map if provided
+        2. Exact name match against known patterns
+        3. Partial keyword match
+        4. Heuristic: binary/low-cardinality column with approval-like values
+        """
         if field_map and "decision" in field_map:
             col = field_map["decision"]
             if col in df.columns:
                 return col
-        # Exact match first
-        for col in df.columns:
-            if col.lower().strip() in OUTCOME_PATTERNS:
+
+        cols_lower = {c: c.lower().strip() for c in df.columns}
+
+        # Exact match
+        for col, cl in cols_lower.items():
+            if cl in OUTCOME_PATTERNS:
                 return col
-        # Partial match
-        for col in df.columns:
-            cl = col.lower()
-            if any(pat in cl for pat in ["action_taken", "decision", "outcome",
-                                          "default", "loan_status", "target",
-                                          "label", "class"]):
+
+        # Partial keyword match
+        for col, cl in cols_lower.items():
+            if any(kw in cl for kw in OUTCOME_KEYWORDS):
                 return col
+
+        # Heuristic: find a low-cardinality column with approval/denial-like values
+        approval_signals = {
+            "approved", "originated", "funded", "yes", "1", "true", "pass",
+            "denied", "rejected", "declined", "no", "0", "false", "fail",
+        }
+        for col in df.columns:
+            vals = df[col].dropna().astype(str).str.strip().str.lower().unique()
+            if 2 <= len(vals) <= 10:
+                if any(v in approval_signals for v in vals):
+                    return col
+
         return None
+
+    # ------------------------------------------------------------------
+    # Protected class column detection
+    # ------------------------------------------------------------------
 
     def _detect_protected_col(
         self,
@@ -96,17 +152,22 @@ class FairnessEngine:
             col = field_map[field_name]
             if col in df.columns:
                 return col
+
         patterns = PROTECTED_CLASS_PATTERNS.get(field_name, [field_name])
+        cols_lower = {c: c.lower().strip() for c in df.columns}
+
         # Exact match
         for pat in patterns:
-            for col in df.columns:
-                if col.lower().strip() == pat.lower():
+            for col, cl in cols_lower.items():
+                if cl == pat.lower():
                     return col
+
         # Substring match
         for pat in patterns:
-            for col in df.columns:
-                if pat in col.lower():
+            for col, cl in cols_lower.items():
+                if pat.lower() in cl:
                     return col
+
         return None
 
     def _detect_all_protected_cols(
@@ -121,12 +182,55 @@ class FairnessEngine:
         return found
 
     # ------------------------------------------------------------------
-    # Outcome normalization
+    # Approval detection — generic for any dataset
     # ------------------------------------------------------------------
 
     def _is_approval(self, value: Any) -> bool:
-        """Universal approval check for any dataset format."""
-        return _profiler.is_approval(value)
+        """
+        Determine if a value represents an approval/positive outcome.
+        Works for: HMDA codes, text values, binary 0/1, True/False, Pass/Fail.
+        """
+        v = str(value).strip().lower()
+
+        # HMDA numeric codes
+        if v in HMDA_APPROVAL_CODES:
+            return True
+        if v in HMDA_DENIAL_CODES:
+            return False
+
+        # Binary numeric
+        if v in ("1", "1.0"):
+            return True
+        if v in ("0", "0.0"):
+            return False
+
+        # Boolean
+        if v in ("true", "yes", "y", "pass", "passed"):
+            return True
+        if v in ("false", "no", "n", "fail", "failed"):
+            return False
+
+        # Text approval signals
+        approval_vals = {
+            "approved", "originated", "loan originated",
+            "approved but not accepted", "funded", "preapproval approved",
+            "approve", "accepted", "closed", "good",
+            "current", "fully paid", "does not meet credit policy. status:fully paid",
+        }
+        if v in approval_vals:
+            return True
+
+        # Text denial signals
+        denial_vals = {
+            "denied", "deny", "rejected", "declined",
+            "application denied", "preapproval denied",
+            "charged off", "default", "late (31-120 days)",
+            "does not meet credit policy. status:charged off",
+        }
+        if v in denial_vals:
+            return False
+
+        return False
 
     def _approval_rate(self, series: pd.Series) -> float:
         if len(series) == 0:
@@ -134,44 +238,76 @@ class FairnessEngine:
         return series.apply(self._is_approval).sum() / len(series)
 
     # ------------------------------------------------------------------
+    # Outcome column binary check — validate it has both approvals & denials
+    # ------------------------------------------------------------------
+
+    def _validate_outcome_col(self, df: pd.DataFrame, outcome_col: str) -> bool:
+        """Return True if column has at least some approvals AND some denials."""
+        if outcome_col not in df.columns:
+            return False
+        approved = df[outcome_col].apply(self._is_approval).sum()
+        total = len(df[outcome_col].dropna())
+        if total == 0:
+            return False
+        # Need at least 5% approvals and 5% denials
+        rate = approved / total
+        return 0.05 <= rate <= 0.95
+
+    # ------------------------------------------------------------------
+    # Age bucketing — convert raw ages to meaningful brackets
+    # ------------------------------------------------------------------
+
+    def _bucket_age(self, series: pd.Series) -> pd.Series:
+        """Convert numeric age values into age brackets for group analysis."""
+        numeric = pd.to_numeric(series, errors="coerce")
+        if numeric.notna().sum() < len(series) * 0.5:
+            # Not mostly numeric — return as-is (already bucketed or text)
+            return series.astype(str).str.strip()
+
+        def _bracket(age):
+            if pd.isna(age):
+                return "Unknown"
+            age = int(age)
+            if age < 25:    return "Under 25"
+            if age < 35:    return "25-34"
+            if age < 45:    return "35-44"
+            if age < 55:    return "45-54"
+            if age < 62:    return "55-61"
+            if age < 70:    return "62-69"
+            return "70+"
+
+        return numeric.map(_bracket)
+
+    # ------------------------------------------------------------------
     # Group normalization
     # ------------------------------------------------------------------
 
     def _normalize_group_values(self, series: pd.Series, field_name: str) -> pd.Series:
         """
-        Normalize group column values for consistent grouping:
-        - Translate HMDA codes to labels
-        - Extract gender from compound strings like 'male : single'
-        - Capitalize for display
+        Normalize demographic column values for consistent grouping.
+        Works for any dataset format.
         """
         s = series.astype(str).str.strip()
+
+        if field_name == "age":
+            return self._bucket_age(s)
 
         if field_name in ("gender", "sex"):
             s = _profiler.normalize_gender_col(s)
         elif field_name in ("race", "ethnicity"):
             s = _profiler.normalize_race_col(s)
         else:
-            # Generic: handle compound strings
+            # Generic: extract first part of compound values like 'male : single'
             if s.str.contains(" : ", na=False).any():
                 s = s.str.split(" : ").str[0].str.strip()
-            # Capitalize
             s = s.str.title()
 
-        # Replace codes like "Not Provided", "Not Applicable" → group as "Unknown"
-        not_provided = {"Not Provided", "Not Applicable", "No Co-Applicant",
-                        "Information Not Provided", "6", "7", "8", "Nan", "None", ""}
-        s = s.map(lambda v: "Unknown" if v in not_provided else v)
+        # Map all "unknown/not provided" variants to "Unknown"
+        s = s.map(lambda v: "Unknown" if v.lower() in UNKNOWN_VALUES else v)
         return s
 
-    # ------------------------------------------------------------------
-    # Backward-compatible group normalization (used by older routes)
-    # ------------------------------------------------------------------
-
     def _normalize_group_col(self, df: pd.DataFrame, col: str) -> pd.Series:
-        """
-        Normalize a group column for analysis.
-        Handles compound values like 'male : single' → 'male'.
-        """
+        """Backward-compatible wrapper."""
         series = df[col].astype(str).str.strip().str.lower()
         if series.str.contains(" : ").any():
             series = series.str.split(" : ").str[0].str.strip()
@@ -190,16 +326,14 @@ class FairnessEngine:
         if protected_col not in df.columns or outcome_col not in df.columns:
             return 1.0
 
-        # Detect field name for normalization
-        field_name = "gender" if any(kw in protected_col.lower()
-                                      for kw in ["sex", "gender"]) else "race"
+        field_name = "gender" if any(
+            kw in protected_col.lower() for kw in ["sex", "gender"]
+        ) else ("age" if "age" in protected_col.lower() else "race")
 
         group_rates = self.compute_approval_rates_by_group(
             df, protected_col, outcome_col, field_name=field_name
         )
-        # Include ALL groups including those with 0% approval — that's the worst violation
-        rates = [v for v in group_rates.values()
-                 if v is not None and not pd.isna(v)]
+        rates = [v for v in group_rates.values() if v is not None and not pd.isna(v)]
 
         if len(rates) < 2:
             return 1.0
@@ -231,10 +365,15 @@ class FairnessEngine:
 
         rates: Dict[str, float] = {}
         for grp_val, grp_df in temp_df.groupby("_grp"):
-            if str(grp_val) == "Unknown":
-                continue   # skip unknown/not-provided groups
+            grp_str = str(grp_val)
+            # Skip unknown/not-provided groups
+            if grp_str == "Unknown" or grp_str.lower() in UNKNOWN_VALUES:
+                continue
+            # Need at least 5 records for a meaningful rate
+            if len(grp_df) < 5:
+                continue
             rate = self._approval_rate(grp_df[outcome_col])
-            rates[str(grp_val)] = round(rate, 4)
+            rates[grp_str] = round(rate, 4)
 
         return rates
 
@@ -252,22 +391,30 @@ class FairnessEngine:
         id_col = None
         if field_map and "applicant_id" in field_map:
             id_col = field_map["applicant_id"]
-        elif "applicant_id" in df.columns:
-            id_col = "applicant_id"
+        else:
+            for col in df.columns:
+                if "id" in col.lower():
+                    id_col = col
+                    break
 
         if id_col is None:
-            return {"error": "No applicant_id column found."}
+            return {"error": "No ID column found."}
 
         match = df[df[id_col].astype(str) == str(applicant_id)]
         if match.empty:
             return {"error": f"Applicant {applicant_id} not found."}
 
         target = match.iloc[0]
+        # Auto-detect numeric financial fields
         numeric_fields = [
-            field_map.get(cf, cf) if field_map else cf
-            for cf in ("applicant_income", "loan_amount", "credit_score", "dti_ratio")
+            c for c in df.columns
+            if pd.api.types.is_numeric_dtype(df[c])
+            and c != id_col
+            and any(kw in c.lower() for kw in ["income", "loan", "amount", "score", "dti", "rate", "credit"])
         ]
-        numeric_fields = [f for f in numeric_fields if f in df.columns]
+
+        if not numeric_fields:
+            numeric_fields = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c]) and c != id_col][:5]
 
         if not numeric_fields:
             return {"target": target.to_dict(), "similar_applicants": [], "comparison": {}}
@@ -318,10 +465,13 @@ class FairnessEngine:
         if not outcome_col:
             return indicators
 
-        # Filter neutral outcomes before analysis
-        NEUTRAL_OUTCOMES = {"withdrawn", "incomplete", "purchased", "file closed",
-                            "closed for incompleteness", "application withdrawn",
-                            "voluntarily withdrawn", "4", "5", "6"}
+        # Filter neutral/non-decisive outcomes
+        NEUTRAL_OUTCOMES = {
+            "withdrawn", "incomplete", "purchased", "file closed",
+            "closed for incompleteness", "application withdrawn",
+            "voluntarily withdrawn", "4", "5", "6",
+            "current", "in grace period",  # Lending Club non-decisive
+        }
         if outcome_col in df.columns:
             mask = ~df[outcome_col].astype(str).str.strip().str.lower().isin(NEUTRAL_OUTCOMES)
             df_work = df[mask] if mask.sum() >= 10 else df
@@ -337,6 +487,7 @@ class FairnessEngine:
             group_rates = self.compute_approval_rates_by_group(
                 df_work, col, outcome_col, field_name=field_name
             )
+            # Need at least 2 valid groups with different rates to flag bias
             if len(group_rates) < 2:
                 continue
 
@@ -402,40 +553,40 @@ class FairnessEngine:
         if dataset_id is None:
             dataset_id = str(uuid.uuid4())
 
-        # Apply code translations (HMDA numeric → labels)
+        # Apply code translations (HMDA numeric → labels) and sample if large
         df, meta = _profiler.prepare_for_analysis(df, apply_translations=True, sample=True)
         dataset_type = meta["dataset_type"]
 
         outcome_col = outcome_column or self._detect_outcome_col(df, field_map)
         cols_to_check = protected_columns or self._detect_all_protected_cols(df, field_map)
 
-        di_ratios: Dict[str, float] = {}
-        approval_rates_by_group: Dict[str, Dict[str, float]] = {}
-
-        # Filter to only decisive outcomes (Approved/Denied) for accurate DI analysis
-        # Withdrawn/Incomplete/Purchased applications were not actually decided — exclude them
-        # This is the CFPB standard: only compare approved vs denied applications
+        # Filter to only decisive outcomes (Approved/Denied)
         NEUTRAL_OUTCOMES = {
             "withdrawn", "incomplete", "purchased", "file closed",
             "closed for incompleteness", "application withdrawn",
-            "voluntarily withdrawn", "4", "5", "6",  # HMDA codes
+            "voluntarily withdrawn", "4", "5", "6",
+            "current", "in grace period",
         }
-
         df_decisive = df
         if outcome_col and outcome_col in df.columns:
             mask = ~df[outcome_col].astype(str).str.strip().str.lower().isin(NEUTRAL_OUTCOMES)
             df_filtered = df[mask]
-            # Only use filtered data if we have enough records
             if len(df_filtered) >= 10:
                 df_decisive = df_filtered
+
+        di_ratios: Dict[str, float] = {}
+        approval_rates_by_group: Dict[str, Dict[str, float]] = {}
 
         for field_name, col in cols_to_check.items():
             if col not in df_decisive.columns or outcome_col is None:
                 continue
-            di_ratios[field_name] = self.analyze_disparate_impact(df_decisive, col, outcome_col)
-            approval_rates_by_group[field_name] = self.compute_approval_rates_by_group(
+            rates = self.compute_approval_rates_by_group(
                 df_decisive, col, outcome_col, field_name=field_name
             )
+            # Only include fields where we have 2+ meaningful groups
+            if len(rates) >= 2:
+                di_ratios[field_name] = self.analyze_disparate_impact(df_decisive, col, outcome_col)
+                approval_rates_by_group[field_name] = rates
 
         indicators = self.detect_bias_indicators(df_decisive, field_map, cols_to_check)
         score = self.compute_fairness_score(df_decisive, field_map, cols_to_check)
@@ -449,20 +600,26 @@ class FairnessEngine:
                 f"{meta['original_rows']:,} rows for performance."
             )
 
-        findings.append(f"Dataset type detected: {dataset_type.replace('_', ' ').title()}.")
+        findings.append(f"Dataset type: {dataset_type.replace('_', ' ').title()}.")
+
+        if outcome_col:
+            findings.append(f"Outcome column used: '{outcome_col}'.")
+        else:
+            findings.append("No outcome/decision column detected in this dataset.")
 
         if not di_ratios:
-            findings.append("No demographic columns found for disparate impact analysis.")
+            findings.append("No demographic columns with sufficient data found for disparate impact analysis.")
             findings.append(
-                "Upload a dataset with race, sex/gender, or age columns for full fair lending analysis."
+                "For full fair lending analysis, ensure your dataset has columns for "
+                "race, sex/gender, or age, and an outcome/decision column."
             )
         else:
             for field, ratio in di_ratios.items():
                 ar = approval_rates_by_group.get(field, {})
-                groups_str = ", ".join(f"{g}: {r:.1%}" for g, r in ar.items())
+                groups_str = ", ".join(f"{g}: {r:.1%}" for g, r in sorted(ar.items()))
                 if ratio < threshold:
                     findings.append(
-                        f"⚠ {field.capitalize()}: DI ratio {ratio:.2%} below {threshold:.0%} threshold. "
+                        f"⚠ {field.capitalize()}: DI ratio {ratio:.2%} — BELOW {threshold:.0%} threshold. "
                         f"Approval rates — {groups_str}."
                     )
                 else:
@@ -516,16 +673,11 @@ class FairnessEngine:
     # ------------------------------------------------------------------
 
     def generate_ai_explanation(self, report: FairnessReport) -> str:
-        """
-        Send the fairness report to the configured LLM (Gemini or OpenAI)
-        and get a plain-English compliance-focused explanation.
-        Returns the AI explanation string, or a fallback message if no key configured.
-        """
         from backend.core.ai_provider import call_llm
 
-        # Build a concise summary of the report for the prompt
         di_lines = "\n".join(
-            f"  - {field.capitalize()}: DI ratio = {ratio:.2%} ({'FAIL' if ratio < Config.DISPARATE_IMPACT_THRESHOLD else 'PASS'})"
+            f"  - {field.capitalize()}: DI ratio = {ratio:.2%} "
+            f"({'FAIL' if ratio < Config.DISPARATE_IMPACT_THRESHOLD else 'PASS'})"
             for field, ratio in (report.disparate_impact_ratios or {}).items()
         ) or "  - No demographic data available for DI analysis."
 
@@ -566,7 +718,8 @@ BIAS INDICATORS FLAGGED:
 STATISTICAL FINDINGS:
 {chr(10).join(f'  - {f}' for f in (report.findings or []))}
 
-Please provide a comprehensive AI-powered fair lending analysis. Be specific, cite the numbers, and explain what they mean legally and operationally. Format your response with clear sections: Executive Summary, Key Risks, Detailed Analysis, AI Recommendations, and Data Gaps."""
+Please provide a comprehensive AI-powered fair lending analysis with sections:
+Executive Summary, Key Risks, Detailed Analysis, AI Recommendations, and Data Gaps."""
 
         try:
             return call_llm(prompt, max_tokens=2048, temperature=0.3)
