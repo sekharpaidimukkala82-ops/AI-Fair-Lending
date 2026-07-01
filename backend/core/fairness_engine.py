@@ -197,8 +197,9 @@ class FairnessEngine:
         group_rates = self.compute_approval_rates_by_group(
             df, protected_col, outcome_col, field_name=field_name
         )
+        # Include ALL groups including those with 0% approval — that's the worst violation
         rates = [v for v in group_rates.values()
-                 if v is not None and not pd.isna(v) and v > 0]
+                 if v is not None and not pd.isna(v)]
 
         if len(rates) < 2:
             return 1.0
