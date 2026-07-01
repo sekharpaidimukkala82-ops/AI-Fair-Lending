@@ -402,16 +402,29 @@ class FairnessEngine:
         di_ratios: Dict[str, float] = {}
         approval_rates_by_group: Dict[str, Dict[str, float]] = {}
 
+        # Filter to only decisive outcomes (Approved/Denied) for accurate DI analysis
+        # Withdrawn/Incomplete applications are excluded as they were not actually decided
+        decisive_vals = {"approved", "denied", "originated", "loan originated",
+                         "approved but not accepted", "preapproval approved", "preapproval denied",
+                         "1", "2", "3", "7", "8"}
+        if outcome_col and outcome_col in df.columns:
+            df_decisive = df[df[outcome_col].astype(str).str.strip().str.lower().isin(decisive_vals)].copy()
+            if len(df_decisive) < 10:
+                # Not enough decisive outcomes — fall back to full dataset
+                df_decisive = df
+        else:
+            df_decisive = df
+
         for field_name, col in cols_to_check.items():
-            if col not in df.columns or outcome_col is None:
+            if col not in df_decisive.columns or outcome_col is None:
                 continue
-            di_ratios[field_name] = self.analyze_disparate_impact(df, col, outcome_col)
+            di_ratios[field_name] = self.analyze_disparate_impact(df_decisive, col, outcome_col)
             approval_rates_by_group[field_name] = self.compute_approval_rates_by_group(
-                df, col, outcome_col, field_name=field_name
+                df_decisive, col, outcome_col, field_name=field_name
             )
 
-        indicators = self.detect_bias_indicators(df, field_map, cols_to_check)
-        score = self.compute_fairness_score(df, field_map, cols_to_check)
+        indicators = self.detect_bias_indicators(df_decisive, field_map, cols_to_check)
+        score = self.compute_fairness_score(df_decisive, field_map, cols_to_check)
 
         threshold = Config.DISPARATE_IMPACT_THRESHOLD
         findings: List[str] = []
