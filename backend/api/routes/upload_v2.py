@@ -70,9 +70,85 @@ async def _create_dataset_record(db: AsyncSession, file_id: str, filename: str,
 
 
 async def _fallback_process_bg(file_id: str, file_path: str, filename: str) -> None:
-    """Fallback when Celery is unavailable — delegates to upload.py's proven pipeline."""
-    from backend.api.routes.upload import _process_dataset_bg
-    await _process_dataset_bg(file_id, file_path, filename)
+    """Fallback when Celery is unavailable — full processing pipeline with DB updates."""
+    from backend.database.connection import AsyncSessionLocal
+    from backend.database.crud import update_dataset_status
+    from backend.core.schema_discovery import SchemaDiscovery
+    from backend.core.data_processor import DataProcessor
+    from backend.core.narrative_generator import NarrativeGenerator
+    from backend.core.embedder import Embedder
+    from backend.core.vector_store import VectorStore
+    import uuid as _uuid
+
+    try:
+        logger.info(f"[{file_id}] Starting processing: {filename}")
+
+        # Update status to processing
+        async with AsyncSessionLocal() as db:
+            await update_dataset_status(db, file_id, "processing")
+            await db.commit()
+
+        # Read file
+        df = _read_dataframe(file_path, filename)
+        logger.info(f"[{file_id}] Read {len(df)} rows")
+
+        # Schema discovery
+        sd = SchemaDiscovery()
+        discovery = sd.generate_discovery_report(df)
+
+        # Data processing
+        dp = DataProcessor()
+        df_clean, proc_report = dp.process(df, discovery.field_mappings)
+
+        # Generate narratives and index
+        try:
+            ng = NarrativeGenerator()
+            narratives = ng.generate_batch(df_clean, discovery.field_mappings)
+            embedder = Embedder()
+            vs = VectorStore()
+            from backend.models.schemas import DocumentChunk
+            chunks = [DocumentChunk(
+                chunk_id=str(_uuid.uuid4()), text=n.text,
+                metadata={**{k: str(v) for k, v in n.metadata.items()}, "dataset_id": file_id, "type": "narrative"},
+                source=filename,
+            ) for n in narratives]
+            if chunks:
+                vs.add_documents(chunks, embedder.embed_batch([c.text for c in chunks]))
+        except Exception as e:
+            logger.warning(f"[{file_id}] Vector indexing failed (non-fatal): {e}")
+
+        # Register in fairness module
+        try:
+            from backend.api.routes import fairness as fairness_route
+            fairness_route._datasets[file_id] = df_clean
+            fairness_route._dataset_field_maps[file_id] = discovery.field_mappings or {}
+        except Exception as e:
+            logger.warning(f"[{file_id}] Fairness registration failed: {e}")
+
+        # Update DB to completed
+        async with AsyncSessionLocal() as db:
+            await update_dataset_status(
+                db, file_id, "completed",
+                total_rows=len(df_clean),
+                total_columns=len(df_clean.columns),
+                mapped_columns=discovery.mapped_columns,
+                quality_score=proc_report.quality_score,
+                duplicates_removed=proc_report.duplicates_removed,
+                field_mappings=discovery.field_mappings,
+                schema_discovery=discovery.model_dump(),
+            )
+            await db.commit()
+
+        logger.info(f"[{file_id}] Complete ✓ ({len(df_clean)} rows)")
+
+    except Exception as exc:
+        logger.exception(f"[{file_id}] Processing failed: {exc}")
+        try:
+            async with AsyncSessionLocal() as db:
+                await update_dataset_status(db, file_id, "failed", error_message=str(exc))
+                await db.commit()
+        except Exception:
+            pass
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
