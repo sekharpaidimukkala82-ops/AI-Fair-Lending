@@ -78,10 +78,18 @@ class RAGEngine:
         top_k: int = 10,
         provider: Optional[str] = None,
         model: Optional[str] = None,
+        dataset_id: Optional[str] = None,
     ) -> ChatResponse:
         t0 = time.time()
 
-        chunks = self._vector_store.search_by_text(question, top_k=top_k)
+        # Filter search to the active dataset if provided
+        filters = {"dataset_id": dataset_id} if dataset_id else None
+        chunks = self._vector_store.search_by_text(question, top_k=top_k, filters=filters)
+
+        # If dataset-filtered search returns nothing, try without filter (fallback)
+        if not chunks and filters:
+            chunks = self._vector_store.search_by_text(question, top_k=top_k)
+
         context = self.build_context(chunks)
 
         if history is None:

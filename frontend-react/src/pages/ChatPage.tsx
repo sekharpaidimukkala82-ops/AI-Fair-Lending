@@ -60,7 +60,8 @@ export default function ChatPage() {
     mutationFn: async (question: string) => {
       const res = await api.post('/chat', {
         messages: [{ role: 'user', content: question }],
-        session_id: 'default',
+        session_id: selectedId || 'default',
+        dataset_id: selectedId,
         top_k: 10,
         provider,
         model,

@@ -56,6 +56,7 @@ async def chat(request: ChatRequest):
         top_k=request.top_k,
         provider=request.provider,
         model=request.model,
+        dataset_id=request.dataset_id,
     )
     elapsed = time.time() - t0
 

@@ -95,6 +95,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     session_id: str = Field(default="default")
+    dataset_id: Optional[str] = Field(default=None, description="Active dataset ID to scope the chat context")
     top_k: int = Field(default=10, ge=1, le=50)
     provider: Optional[str] = Field(default=None, description="Override active provider: 'gemini' or 'openai'")
     model: Optional[str] = Field(default=None, description="Override active model")
