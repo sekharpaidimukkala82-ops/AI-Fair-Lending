@@ -237,39 +237,33 @@ async def get_feature_importance():
 
 @router.post("/segments", response_model=SegmentResult)
 async def get_applicant_segments(request: BatchPredictRequest):
-    """
-    Segment applicants using KMeans clustering.
-    Returns cluster assignments and profile summaries.
-    """
-    if not _get_ml_engine().is_trained:
-        raise HTTPException(status_code=422, detail="Model not trained.")
-
+    """Segment applicants using KMeans clustering. Auto-trains if needed."""
     df = _get_df(request.dataset_id)
-    field_map = _dataset_field_maps.get(request.dataset_id)
+    engine = _get_ml_engine()
+
+    # Auto-train if needed
+    if not engine.is_trained:
+        try:
+            engine.train(df)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Auto-train failed: {exc}")
 
     try:
-        segmented_df = _get_ml_engine().segment_applicants(df, field_map)
+        segmented_df = engine.segment_applicants(df, None)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    # Build cluster profiles
     cluster_labels = segmented_df["cluster"].tolist()
     num_clusters = len(set(cluster_labels))
-
     cluster_profiles: Dict[str, Any] = {}
     segment_sizes: Dict[str, int] = {}
-
-    numeric_cols = list(segmented_df.select_dtypes(include=["number"]).columns)
-    numeric_cols = [c for c in numeric_cols if c != "cluster"]
+    numeric_cols = [c for c in segmented_df.select_dtypes(include=["number"]).columns if c != "cluster"]
 
     for cid in sorted(set(cluster_labels)):
         subset = segmented_df[segmented_df["cluster"] == cid]
         size = len(subset)
         segment_sizes[f"cluster_{cid}"] = size
-        if numeric_cols:
-            profile = subset[numeric_cols].mean().round(2).to_dict()
-        else:
-            profile = {}
+        profile = subset[numeric_cols].mean().round(2).to_dict() if numeric_cols else {}
         cluster_profiles[f"cluster_{cid}"] = {
             "size": size,
             "pct": round(size / len(df) * 100, 1),
@@ -302,19 +296,24 @@ async def detect_anomalies(request: AnomalyRequest):
             raise HTTPException(status_code=422, detail=f"Auto-train failed: {exc}")
 
     try:
-        anomaly_indices = engine.detect_anomalies(df, None)
+        anomaly_results = engine.detect_anomalies(df, None)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    anomalous_records = df.iloc[anomaly_indices].to_dict(orient="records")
+    anomaly_indices = [r["index"] for r in anomaly_results]
+    anomalous_records = []
+    for r in anomaly_results[:50]:
+        rec = df.iloc[r["index"]].to_dict()
+        rec["_anomaly_score"] = r["score"]
+        anomalous_records.append(rec)
 
     return {
         "dataset_id": request.dataset_id,
         "total_records": len(df),
-        "anomaly_count": len(anomaly_indices),
-        "anomaly_rate": round(len(anomaly_indices) / len(df) * 100, 2) if len(df) > 0 else 0,
+        "anomaly_count": len(anomaly_results),
+        "anomaly_rate": round(len(anomaly_results) / len(df) * 100, 2) if len(df) > 0 else 0,
         "anomaly_indices": anomaly_indices,
-        "anomalous_records": anomalous_records[:50],
+        "anomalous_records": anomalous_records,
     }
 
 

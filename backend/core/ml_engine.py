@@ -362,9 +362,10 @@ class MLEngine:
         self,
         df: pd.DataFrame,
         field_map: Optional[Dict[str, str]] = None,
-    ) -> List[int]:
+    ) -> List[Dict]:
         """
-        Return a list of row indices that are flagged as anomalous.
+        Return a list of anomalous records with row index and anomaly score.
+        Score is normalized 0-1 (higher = more anomalous).
         """
         if self._iso_model is None:
             raise RuntimeError("Model not trained. Call train() first.")
@@ -377,8 +378,24 @@ class MLEngine:
         X, _ = self._prepare_features(feature_df, fit=False)
 
         predictions = self._iso_model.predict(X)
-        # IsolationForest returns -1 for anomalies, +1 for inliers
-        return [int(i) for i, p in enumerate(predictions) if p == -1]
+        # decision_function returns negative scores for anomalies
+        # More negative = more anomalous; normalize to 0-1
+        raw_scores = self._iso_model.decision_function(X)
+        # Invert and normalize: most anomalous gets score close to 1
+        min_s, max_s = raw_scores.min(), raw_scores.max()
+        if max_s > min_s:
+            normalized = 1.0 - (raw_scores - min_s) / (max_s - min_s)
+        else:
+            normalized = np.zeros_like(raw_scores)
+
+        results = []
+        for i, (pred, score) in enumerate(zip(predictions, normalized)):
+            if pred == -1:  # anomaly
+                results.append({
+                    "index": int(i),
+                    "score": round(float(score), 4),
+                })
+        return results
 
     # ------------------------------------------------------------------
     # Model Persistence

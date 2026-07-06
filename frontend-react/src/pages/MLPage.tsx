@@ -68,7 +68,10 @@ export default function MLPage() {
       setAnomalyResult({
         anomaly_count: data.anomaly_count || 0,
         anomaly_rate: data.total_records ? data.anomaly_count / data.total_records : 0,
-        anomalies: (data.anomaly_indices || []).slice(0, 20).map((idx: number) => ({ index: idx, score: 0 })),
+        anomalies: (data.anomalous_records || []).slice(0, 20).map((rec: any, i: number) => ({
+          index: data.anomaly_indices?.[i] ?? i,
+          score: rec._anomaly_score ?? 0,
+        })),
       })
       toast.success(`Anomaly detection complete — ${data.anomaly_count} found`)
     },
