@@ -104,26 +104,23 @@ async def generate_fairness_report(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Generate a fairness audit report. Auth optional."""
-    df = _get_df(request.dataset_id)
+    df = _get_df_safe(request.dataset_id)
+    if df is None:
+        raise HTTPException(status_code=404,
+            detail="Dataset file not found. Please re-upload the file and try again.")
     field_map = request.field_map
-
     fairness_report = _get_fairness_engine().generate_audit(df, field_map, dataset_id=request.dataset_id)
     content = _get_report_gen().generate_fairness_report(fairness_report, fmt=format)
-    fname = _filename(f"fairness_report_{request.dataset_id}", format)
-
-    # Persist report record
+    fname = _filename(f"fairness_report_{request.dataset_id[:8]}", format)
     try:
         from backend.database.crud import create_report, get_dataset_by_file_id
         ds = await get_dataset_by_file_id(db, request.dataset_id)
         if ds:
-            await create_report(db, {
-                "dataset_id": ds.id, "report_type": "fairness", "format": format,
-                "generated_by_id": current_user.id if current_user else None,
-                "file_size": len(content),
-            })
+            await create_report(db, {"dataset_id": ds.id, "report_type": "fairness", "format": format,
+                                     "generated_by_id": current_user.id if current_user else None,
+                                     "file_size": len(content)})
     except Exception:
         pass
-
     return Response(content=content, media_type=_content_type(format),
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
 
@@ -136,7 +133,9 @@ async def generate_compliance_report(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Generate an HMDA compliance summary report."""
-    df = _get_df(request.dataset_id)
+    df = _get_df_safe(request.dataset_id)
+    if df is None:
+        raise HTTPException(status_code=404, detail="Dataset file not found. Please re-upload and try again.")
     content = _get_report_gen().generate_compliance_report(df, None, fmt=format)
     fname = _filename(f"compliance_report_{request.dataset_id}", format)
     try:
@@ -160,7 +159,9 @@ async def generate_risk_report(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Generate a risk assessment report. Works with or without prior ML training."""
-    df = _get_df(request.dataset_id)
+    df = _get_df_safe(request.dataset_id)
+    if df is None:
+        raise HTTPException(status_code=404, detail="Dataset file not found. Please re-upload and try again.")
 
     # Try to use cached predictions first
     predictions = _predictions_cache.get(request.dataset_id, [])

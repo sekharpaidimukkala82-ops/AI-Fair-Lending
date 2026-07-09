@@ -85,12 +85,16 @@ export default function ReportsPage() {
       URL.revokeObjectURL(url)
       return { reportType, format }
     },
-    onSuccess: (data, vars) => {
-      toast.success(`${vars.reportType} report downloaded!`)
+    onSuccess: ({ reportType, format }) => {
+      toast.success(`${reportType} report downloaded!`)
     },
     onError: (err: any) => {
-      const msg = err.message || err.response?.data?.detail || 'Report generation failed'
-      toast.error(msg)
+      const msg = err.response?.data?.detail || err.message || 'Report generation failed'
+      if (msg.includes('not found') || msg.includes('re-upload')) {
+        toast.error(`Dataset file missing — please re-upload "${selected?.filename}" and try again.`)
+      } else {
+        toast.error(msg)
+      }
       setGeneratingType(null)
     },
     onSettled: () => setGeneratingType(null),
