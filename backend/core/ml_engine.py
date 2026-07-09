@@ -337,6 +337,7 @@ class MLEngine:
     ) -> pd.DataFrame:
         """
         Assign cluster labels to every applicant.
+        Auto-retrains KMeans if feature count changed (new dataset).
         Returns df with an added 'cluster' column.
         """
         if self._kmeans_model is None:
@@ -344,10 +345,21 @@ class MLEngine:
 
         id_col = self._resolve_id_col(df, field_map)
         target_col = self._resolve_target_col(df, field_map)
-
         drop_cols = [c for c in [id_col, target_col] if c]
         feature_df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
         X, _ = self._prepare_features(feature_df, fit=False)
+
+        # Feature mismatch — retrain KMeans on current dataset
+        if X.shape[1] != len(self._feature_names):
+            import logging
+            logging.getLogger("fair_lending.ml").info(
+                f"Feature mismatch ({X.shape[1]} vs {len(self._feature_names)}) — "
+                f"retraining KMeans on current dataset"
+            )
+            X, _ = self._prepare_features(feature_df, fit=True)
+            n_clusters = min(Config.KMEANS_CLUSTERS, len(df) // 10 + 1)
+            self._kmeans_model = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            self._kmeans_model.fit(X)
 
         labels = self._kmeans_model.predict(X)
         result = df.copy()
@@ -365,37 +377,45 @@ class MLEngine:
     ) -> List[Dict]:
         """
         Return a list of anomalous records with row index and anomaly score.
-        Score is normalized 0-1 (higher = more anomalous).
+        Auto-retrains IsolationForest if feature count changed (new dataset).
         """
         if self._iso_model is None:
             raise RuntimeError("Model not trained. Call train() first.")
 
         id_col = self._resolve_id_col(df, field_map)
         target_col = self._resolve_target_col(df, field_map)
-
         drop_cols = [c for c in [id_col, target_col] if c]
         feature_df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
+
+        # Try with existing model first
         X, _ = self._prepare_features(feature_df, fit=False)
 
-        predictions = self._iso_model.predict(X)
-        # decision_function returns negative scores for anomalies
-        # More negative = more anomalous; normalize to 0-1
-        raw_scores = self._iso_model.decision_function(X)
-        # Invert and normalize: most anomalous gets score close to 1
-        min_s, max_s = raw_scores.min(), raw_scores.max()
-        if max_s > min_s:
-            normalized = 1.0 - (raw_scores - min_s) / (max_s - min_s)
-        else:
-            normalized = np.zeros_like(raw_scores)
+        # Feature mismatch — retrain IsolationForest on current dataset
+        if X.shape[1] != len(self._feature_names):
+            import logging
+            logging.getLogger("fair_lending.ml").info(
+                f"Feature mismatch ({X.shape[1]} vs {len(self._feature_names)}) — "
+                f"retraining IsolationForest on current dataset"
+            )
+            X, _ = self._prepare_features(feature_df, fit=True)
+            self._iso_model = IsolationForest(
+                n_estimators=100,
+                contamination=Config.ANOMALY_CONTAMINATION,
+                random_state=42,
+                n_jobs=-1,
+            )
+            self._iso_model.fit(X)
 
-        results = []
-        for i, (pred, score) in enumerate(zip(predictions, normalized)):
-            if pred == -1:  # anomaly
-                results.append({
-                    "index": int(i),
-                    "score": round(float(score), 4),
-                })
-        return results
+        predictions = self._iso_model.predict(X)
+        raw_scores = self._iso_model.decision_function(X)
+        min_s, max_s = raw_scores.min(), raw_scores.max()
+        normalized = 1.0 - (raw_scores - min_s) / (max_s - min_s) if max_s > min_s else np.zeros_like(raw_scores)
+
+        return [
+            {"index": int(i), "score": round(float(normalized[i]), 4)}
+            for i, pred in enumerate(predictions)
+            if pred == -1
+        ]
 
     # ------------------------------------------------------------------
     # Model Persistence
