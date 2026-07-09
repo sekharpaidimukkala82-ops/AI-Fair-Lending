@@ -198,38 +198,34 @@ async def generate_executive_summary(
     summary_data: Dict[str, Any] = request.custom_data or {}
 
     if request.dataset_id:
-        df = _datasets.get(request.dataset_id)
-
-        # Load from disk if not in memory
-        if df is None:
-            try:
-                df = _get_df(request.dataset_id)
-            except Exception:
-                df = None
+        df = None
+        try:
+            df = _get_df(request.dataset_id)
+        except Exception:
+            df = None
 
         if df is not None:
             summary_data["dataset_id"] = request.dataset_id
             summary_data["total_records"] = len(df)
             summary_data["total_fields"] = len(df.columns)
 
-            # Fairness analysis — resilient
+            # Fairness analysis
             try:
-                field_map = _dataset_field_maps.get(request.dataset_id)
                 fairness_report = _get_fairness_engine().generate_audit(
-                    df, field_map, dataset_id=request.dataset_id
+                    df, None, dataset_id=request.dataset_id
                 )
                 summary_data["fairness_score"] = fairness_report.score
                 summary_data["findings"] = fairness_report.findings
                 summary_data["recommendations"] = fairness_report.recommendations
                 summary_data["disparate_impact_ratios"] = fairness_report.disparate_impact_ratios
+                summary_data["approval_rates_by_group"] = fairness_report.approval_rates_by_group
+                summary_data["bias_indicators"] = [b.model_dump() for b in fairness_report.bias_indicators]
             except Exception as e:
                 summary_data["fairness_note"] = f"Fairness analysis unavailable: {e}"
                 summary_data["findings"] = []
-                summary_data["recommendations"] = [
-                    "Upload an HMDA or lending dataset and run Fairness Analysis for detailed findings."
-                ]
+                summary_data["recommendations"] = ["Upload an HMDA or lending dataset for detailed findings."]
 
-            # ML predictions — resilient
+            # ML predictions
             try:
                 predictions = _predictions_cache.get(request.dataset_id, [])
                 if predictions:
@@ -240,11 +236,15 @@ async def generate_executive_summary(
                     summary_data["model_approval_rate"] = round(approved / len(predictions) * 100, 1)
             except Exception:
                 pass
+        else:
+            summary_data["error"] = "Dataset file not found on disk. Please re-upload the dataset."
+            summary_data["findings"] = []
+            summary_data["recommendations"] = ["Re-upload the dataset to generate a full report."]
 
     if not summary_data:
         summary_data = {
             "platform": "Fair Lending Intelligence Platform",
-            "message": "No dataset selected. Upload a dataset and select it from the top bar.",
+            "message": "No dataset selected.",
             "findings": [],
             "recommendations": ["Upload a lending dataset to generate a full executive summary."],
         }

@@ -17,6 +17,8 @@ from reportlab.platypus import (
     Paragraph, Spacer, Table, TableStyle, SimpleDocTemplate, HRFlowable
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.graphics.shapes import Drawing, Rect, String, Line
+from reportlab.graphics import renderPDF
 
 from backend.models.schemas import FairnessReport, MLPrediction
 
@@ -150,6 +152,80 @@ class ReportGenerator:
         elif score >= 60:
             return AMBER
         return RED
+
+    def _bar_chart(self, data: Dict[str, float], title: str, width: float = 6.5, height: float = 2.2, threshold: float = 0.80) -> Drawing:
+        """
+        Draw a horizontal bar chart showing approval rates or DI ratios.
+        Bars below threshold are red, above are navy/green.
+        """
+        from reportlab.graphics.shapes import Drawing, Rect, String, Line, Group
+        from reportlab.platypus import Flowable
+
+        if not data:
+            return Drawing(width * inch, 0.1 * inch)
+
+        W = width * inch
+        H = height * inch
+        margin_left = 1.6 * inch
+        margin_right = 0.5 * inch
+        margin_top = 0.3 * inch
+        margin_bottom = 0.5 * inch
+        bar_area_w = W - margin_left - margin_right
+        bar_area_h = H - margin_top - margin_bottom
+
+        items = sorted(data.items(), key=lambda x: x[1])
+        n = len(items)
+        bar_height = min(bar_area_h / n * 0.65, 0.25 * inch)
+        gap = bar_area_h / n
+
+        d = Drawing(W, H)
+
+        # Title
+        d.add(String(W / 2, H - 0.15 * inch, title,
+                     fontSize=10, fontName="Helvetica-Bold",
+                     fillColor=colors.HexColor("#1a237e"),
+                     textAnchor="middle"))
+
+        max_val = max(v for _, v in items) if items else 1.0
+        scale_max = max(max_val * 1.1, threshold * 1.1, 1.0)
+
+        for i, (label, value) in enumerate(items):
+            y = margin_bottom + i * gap + (gap - bar_height) / 2
+            bar_w = (value / scale_max) * bar_area_w
+
+            # Bar fill color
+            bar_color = colors.HexColor("#1a237e") if value >= threshold else colors.HexColor("#ef4444")
+
+            # Bar
+            d.add(Rect(margin_left, y, bar_w, bar_height,
+                       fillColor=bar_color, strokeColor=None))
+
+            # Label (left)
+            label_text = str(label)[:18]
+            d.add(String(margin_left - 4, y + bar_height / 2 - 4, label_text,
+                         fontSize=8, fontName="Helvetica",
+                         fillColor=colors.HexColor("#374151"),
+                         textAnchor="end"))
+
+            # Value (right of bar)
+            val_str = f"{value:.1%}" if value <= 1.0 else f"{value:.3f}"
+            d.add(String(margin_left + bar_w + 4, y + bar_height / 2 - 4, val_str,
+                         fontSize=8, fontName="Helvetica-Bold",
+                         fillColor=bar_color,
+                         textAnchor="start"))
+
+        # Threshold line
+        threshold_x = margin_left + (threshold / scale_max) * bar_area_w
+        d.add(Line(threshold_x, margin_bottom - 4, threshold_x, H - margin_top,
+                   strokeColor=colors.HexColor("#ef4444"),
+                   strokeWidth=1.2,
+                   strokeDashArray=[4, 3]))
+        d.add(String(threshold_x, margin_bottom - 14, f"80% threshold",
+                     fontSize=7, fontName="Helvetica",
+                     fillColor=colors.HexColor("#ef4444"),
+                     textAnchor="middle"))
+
+        return d
 
     # ------------------------------------------------------------------
     # Fairness Report
@@ -301,6 +377,18 @@ class ReportGenerator:
                     style.add("TEXTCOLOR", (2, i), (2, i), GREEN)
             t.setStyle(style)
             story.append(t)
+
+            # DI ratio bar chart
+            try:
+                di_chart = self._bar_chart(
+                    di_ratios, "Disparate Impact Ratios by Protected Class",
+                    width=6.5, height=max(1.5, len(di_ratios) * 0.4),
+                    threshold=0.80
+                )
+                story.append(Spacer(1, 0.08 * inch))
+                story.append(di_chart)
+            except Exception:
+                pass
             story.append(Spacer(1, 0.1 * inch))
 
         # ── Approval Rates by Demographic Group ────────────────────────────
@@ -318,6 +406,20 @@ class ReportGenerator:
                 if not rates:
                     continue
                 story.append(self._p(field.capitalize(), "SubHeading"))
+
+                # Bar chart for this field
+                try:
+                    chart = self._bar_chart(
+                        {k: v for k, v in rates.items()},
+                        f"Approval Rate by {field.capitalize()}",
+                        width=6.5, height=max(1.8, len(rates) * 0.35),
+                        threshold=0.80
+                    )
+                    story.append(chart)
+                    story.append(Spacer(1, 0.05 * inch))
+                except Exception:
+                    pass
+
                 max_rate = max(rates.values())
                 rate_data = [["Group", "Approval Rate", "DI vs Best Group", "Status"]]
                 for grp, rate in sorted(rates.items(), key=lambda x: x[1], reverse=True):
@@ -334,7 +436,7 @@ class ReportGenerator:
                         style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#E3F2FD"))
                 t.setStyle(style)
                 story.append(t)
-                story.append(Spacer(1, 0.08 * inch))
+                story.append(Spacer(1, 0.1 * inch))
 
         # ── Bias Indicators ──────────────────────────────────────────────────
         if indicators:
