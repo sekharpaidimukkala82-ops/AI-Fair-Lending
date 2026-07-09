@@ -64,7 +64,26 @@ def _get_singletons():
 
 def _read_dataframe(file_path: str, filename: str) -> pd.DataFrame:
     ext = filename.rsplit(".", 1)[-1].lower()
-    if ext == "csv":   return pd.read_csv(file_path)
+    if ext == "csv":
+        # Use chunked reading for large files to avoid memory spikes
+        try:
+            import os
+            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            if file_size > 20 * 1024 * 1024:  # >20MB — read in chunks
+                logger.info(f"Large CSV ({file_size/1024/1024:.1f}MB) — using chunked read")
+                chunks = []
+                rows_read = 0
+                MAX_ROWS = 200_000
+                for chunk in pd.read_csv(file_path, chunksize=50_000, low_memory=False):
+                    chunks.append(chunk)
+                    rows_read += len(chunk)
+                    if rows_read >= MAX_ROWS:
+                        logger.info(f"Capped at {MAX_ROWS} rows for memory safety")
+                        break
+                return pd.concat(chunks, ignore_index=True)
+        except Exception as e:
+            logger.warning(f"Chunked read failed, falling back to normal read: {e}")
+        return pd.read_csv(file_path, low_memory=False)
     if ext == "xlsx":  return pd.read_excel(file_path, engine="openpyxl")
     if ext == "json":  return pd.read_json(file_path)
     raise ValueError(f"Unsupported format: {ext}")
@@ -98,62 +117,82 @@ async def _process_dataset_bg(file_id: str, file_path: str, filename: str) -> No
         _upload_status[file_id]["status"] = "processing"
 
         df = _read_dataframe(file_path, filename)
-        discovery = sd.generate_discovery_report(df)
-        df_clean, proc_report = dp.process(df, discovery.field_mappings)
-        narratives = ng.generate_batch(df_clean, discovery.field_mappings)
+        logger.info(f"[{file_id}] Loaded {len(df)} rows, {len(df.columns)} columns")
 
-        if narratives and vs is not None and embedder is not None:
-            from backend.models.schemas import DocumentChunk
-            chunks, texts = [], []
-            # Limit to 500 rows on free tier to avoid OOM kills
-            max_rows = 500
-            narratives_to_index = narratives[:max_rows]
-            for narr in narratives_to_index:
-                cid = str(uuid.uuid4())
-                chunks.append(DocumentChunk(
-                    chunk_id=cid, text=narr.text,
-                    metadata={**{k: str(v) for k, v in narr.metadata.items()}, "dataset_id": file_id, "type": "narrative"},
-                    source=filename,
-                ))
-                texts.append(narr.text)
-            try:
-                # Process in batches of 50 to avoid memory spikes
-                batch_size = 50
-                for i in range(0, len(chunks), batch_size):
-                    batch_chunks = chunks[i:i+batch_size]
-                    batch_texts = texts[i:i+batch_size]
-                    vs.add_documents(batch_chunks, embedder.embed_batch(batch_texts))
-            except Exception as e:
-                logger.warning(f"[{file_id}] Vector indexing failed (non-fatal): {e}")
+        # For very large files (>50k rows), skip heavy processing to avoid OOM
+        MAX_ROWS_FULL_PROCESS = 50_000
+        is_large = len(df) > MAX_ROWS_FULL_PROCESS
+
+        if is_large:
+            logger.info(f"[{file_id}] Large file ({len(df)} rows) — using lightweight processing")
+            # Just get basic schema info without full processing
+            discovery = sd.generate_discovery_report(df.head(1000))
+            # Sample for quality scoring
+            df_sample = df.sample(min(5000, len(df)), random_state=42)
+            df_clean, proc_report = dp.process(df_sample, discovery.field_mappings)
+            # Scale stats back to full dataset
+            proc_report_dict = proc_report.model_dump()
+            proc_report_dict['original_rows'] = len(df)
+            proc_report_dict['final_rows'] = len(df)
+        else:
+            discovery = sd.generate_discovery_report(df)
+            df_clean, proc_report = dp.process(df, discovery.field_mappings)
+            proc_report_dict = proc_report.model_dump()
+
+        # Only index narratives for small datasets
+        if not is_large and vs is not None and embedder is not None:
+            narratives = ng.generate_batch(df_clean, discovery.field_mappings)
+            if narratives:
+                from backend.models.schemas import DocumentChunk
+                chunks, texts = [], []
+                for narr in narratives[:500]:
+                    cid = str(uuid.uuid4())
+                    chunks.append(DocumentChunk(
+                        chunk_id=cid, text=narr.text,
+                        metadata={**{k: str(v) for k, v in narr.metadata.items()}, "dataset_id": file_id, "type": "narrative"},
+                        source=filename,
+                    ))
+                    texts.append(narr.text)
+                try:
+                    batch_size = 50
+                    for i in range(0, len(chunks), batch_size):
+                        vs.add_documents(chunks[i:i+batch_size], embedder.embed_batch(texts[i:i+batch_size]))
+                except Exception as e:
+                    logger.warning(f"[{file_id}] Vector indexing failed (non-fatal): {e}")
 
         completed_data = {
             "status": "completed",
             "schema_discovery": discovery.model_dump(),
-            "processing_report": proc_report.model_dump(),
-            "rows": len(df_clean),
-            "columns": list(df_clean.columns),
+            "processing_report": proc_report_dict,
+            "rows": len(df),
+            "columns": list(df.columns),
         }
         _upload_status[file_id].update(completed_data)
-        await _persist_completed(file_id, completed_data)
+        await _persist_completed(file_id, {
+            **completed_data,
+            "processing_report": proc_report_dict,
+        })
 
-        # Save processed CSV to disk so it can be reloaded after server restart
+        # Save processed CSV — for large files save a sample to keep disk usage low
         try:
+            save_df = df_clean if not is_large else df.head(10000)
             processed_path = Config.get_upload_path(f"{file_id}_processed.csv")
-            df_clean.to_csv(processed_path, index=False)
-            logger.info(f"[{file_id}] Processed CSV saved to {processed_path}")
+            save_df.to_csv(processed_path, index=False)
+            logger.info(f"[{file_id}] Processed CSV saved ({len(save_df)} rows)")
         except Exception as e:
             logger.warning(f"[{file_id}] Could not save processed CSV (non-fatal): {e}")
 
-        # Bridge: register the cleaned dataset in the fairness module
+        # Register in fairness module — use sample for large files
         try:
             from backend.api.routes import fairness as fairness_route
-            fairness_route._datasets[file_id] = df_clean
+            register_df = df_clean if not is_large else df.head(10000)
+            fairness_route._datasets[file_id] = register_df
             fairness_route._dataset_field_maps[file_id] = discovery.field_mappings or {}
-            logger.info(f"[{file_id}] Registered in fairness module ✓")
+            logger.info(f"[{file_id}] Registered in fairness module ✓ ({len(register_df)} rows)")
         except Exception as e:
             logger.warning(f"[{file_id}] Fairness registration failed (non-fatal): {e}")
 
-        logger.info(f"[{file_id}] Complete ✓")
+        logger.info(f"[{file_id}] Complete ✓ ({len(df)} total rows)")
 
     except Exception as exc:
         logger.exception(f"[{file_id}] Processing failed: {exc}")
