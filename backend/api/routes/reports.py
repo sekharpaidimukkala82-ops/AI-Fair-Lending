@@ -96,7 +96,7 @@ async def generate_fairness_report(
 ):
     """Generate a fairness audit report. Auth optional."""
     df = _get_df(request.dataset_id)
-    field_map = request.field_map or _dataset_field_maps.get(request.dataset_id)
+    field_map = request.field_map
 
     fairness_report = _get_fairness_engine().generate_audit(df, field_map, dataset_id=request.dataset_id)
     content = _get_report_gen().generate_fairness_report(fairness_report, fmt=format)
