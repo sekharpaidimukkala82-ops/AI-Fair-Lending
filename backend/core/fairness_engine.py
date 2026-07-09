@@ -578,10 +578,37 @@ class FairnessEngine:
         field_map: Optional[Dict[str, str]] = None,
         protected_columns: Optional[Dict[str, str]] = None,
     ) -> float:
+        """
+        Compute fairness score 0-100 based on disparate impact ratios.
+        
+        Scoring: For each protected class where DI < 0.80 threshold,
+        penalty = (0.80 - DI_ratio) * 100 points
+        
+        Example:
+          Race DI = 0.65 → penalty = (0.80-0.65)*100 = 15 pts
+          Gender DI = 0.72 → penalty = (0.80-0.72)*100 = 8 pts
+          Total penalty = 23 → Score = 100 - 23 = 77
+          
+        This gives a smooth, proportional score rather than flat penalties.
+        """
         indicators = self.detect_bias_indicators(df, field_map, protected_columns)
-        penalties = {"critical": 30, "high": 20, "medium": 10}
-        total_penalty = sum(penalties.get(ind.severity, 0) for ind in indicators)
-        return round(max(0.0, 100.0 - total_penalty), 2)
+        if not indicators:
+            return 100.0
+
+        # Get unique DI ratios per field (use worst group per field)
+        field_worst_di: Dict[str, float] = {}
+        for ind in indicators:
+            field = ind.field
+            if field not in field_worst_di or ind.value < field_worst_di[field]:
+                field_worst_di[field] = ind.value
+
+        threshold = Config.DISPARATE_IMPACT_THRESHOLD  # 0.80
+        total_penalty = sum(
+            (threshold - di) * 100
+            for di in field_worst_di.values()
+            if di < threshold
+        )
+        return round(max(0.0, 100.0 - total_penalty), 1)
 
     # ------------------------------------------------------------------
     # Full Audit
