@@ -138,8 +138,9 @@ function MLRunCard({ result, index, total }: { result: MLAuditResult; index: num
 export default function MLPage() {
   const { selectedId, getSelected, mlHistory, addMLResult, clearMLHistory } = useDatasetStore()
   const selected = getSelected()
-  const history = selectedId ? (mlHistory[selectedId] ?? []) : []
-  const latestTrain = history.find(r => r.accuracy > 0)
+  // Show only the LATEST result per dataset
+  const latestResult = selectedId ? (mlHistory[selectedId] ?? [])[0] ?? null : null
+  const latestTrain = selectedId ? (mlHistory[selectedId] ?? []).find(r => r.accuracy > 0) ?? null : null
 
   const trainMutation = useMutation({
     mutationFn: async () => {
@@ -231,12 +232,12 @@ export default function MLPage() {
         </div>
       </div>
 
-      {history.length > 0 && (
+      {latestResult && (
         <div className="space-y-4">
           <p className="text-sm text-gray-500 flex items-center gap-2">
-            <Clock className="w-4 h-4"/> {history.length} result{history.length>1?'s':''} — scroll to see all · results persist across navigation
+            <Clock className="w-4 h-4"/> Last run: {new Date(latestResult.timestamp).toLocaleString()} · results persist across navigation
           </p>
-          {history.map((r,i) => <MLRunCard key={r.id} result={r} index={i} total={history.length}/>)}
+          <MLRunCard key={latestResult.id} result={latestResult} index={0} total={1}/>
         </div>
       )}
     </div>
