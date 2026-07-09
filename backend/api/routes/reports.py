@@ -75,6 +75,15 @@ def _get_df(dataset_id: str) -> pd.DataFrame:
     return _load_dataset(dataset_id)
 
 
+def _get_df_safe(dataset_id: str):
+    """Stateless disk loader that returns None instead of raising 404."""
+    try:
+        from backend.api.routes.fairness import _load_dataset
+        return _load_dataset(dataset_id)
+    except Exception:
+        return None
+
+
 def _content_type(fmt: str) -> str:
     return "application/pdf" if fmt == "pdf" else "application/json"
 
@@ -198,11 +207,7 @@ async def generate_executive_summary(
     summary_data: Dict[str, Any] = request.custom_data or {}
 
     if request.dataset_id:
-        df = None
-        try:
-            df = _get_df(request.dataset_id)
-        except Exception:
-            df = None
+        df = _get_df_safe(request.dataset_id)
 
         if df is not None:
             summary_data["dataset_id"] = request.dataset_id
