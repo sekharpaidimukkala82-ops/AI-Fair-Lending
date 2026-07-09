@@ -92,14 +92,24 @@ class RAGEngine:
 
         context = self.build_context(chunks)
 
+        # If still no context and dataset_id is given, generate a data summary directly from the file
+        dataset_summary = ""
+        if dataset_id and (not chunks or len(chunks) < 3):
+            dataset_summary = self._build_dataset_summary(dataset_id)
+
         if history is None:
             history = self._session_memory[session_id][-(Config.SESSION_HISTORY_LIMIT):]
         else:
             stored = self._session_memory[session_id][-(Config.SESSION_HISTORY_LIMIT // 2):]
             history = stored + list(history)
 
+        # Build prompt with dataset summary if available
+        context_section = context
+        if dataset_summary:
+            context_section = f"DATASET SUMMARY (direct from uploaded file):\n{dataset_summary}\n\nADDITIONAL CONTEXT FROM INDEX:\n{context}"
+
         full_prompt = (
-            SYSTEM_PROMPT.format(context=context, history=self._format_history(history))
+            SYSTEM_PROMPT.format(context=context_section, history=self._format_history(history))
             + f"\n\nUSER QUESTION: {question}\n\nASSISTANT:"
         )
 
@@ -133,6 +143,55 @@ class RAGEngine:
             },
             response_time_seconds=round(time.time() - t0, 3),
         )
+
+    def _build_dataset_summary(self, dataset_id: str) -> str:
+        """
+        Build a concise data summary directly from the uploaded file.
+        Used when vector index has no chunks for this dataset.
+        Returns a plain-text summary the LLM can reason about.
+        """
+        try:
+            from backend.api.routes.fairness import _load_dataset
+            from backend.core.fairness_engine import FairnessEngine
+            import pandas as pd
+
+            df = _load_dataset(dataset_id)
+            engine = FairnessEngine()
+
+            lines = [
+                f"Dataset: {len(df)} rows, {len(df.columns)} columns",
+                f"Columns: {', '.join(df.columns[:20])}",
+            ]
+
+            # Outcome column stats
+            outcome_col = engine._detect_outcome_col(df)
+            if outcome_col:
+                val_counts = df[outcome_col].value_counts()
+                lines.append(f"Outcome column '{outcome_col}': {val_counts.to_dict()}")
+                total = len(df)
+                approved = df[outcome_col].apply(engine._is_approval).sum()
+                lines.append(f"Overall approval rate: {approved}/{total} = {approved/total:.1%}")
+
+            # Protected class stats
+            protected = engine._detect_all_protected_cols(df)
+            for field, col in protected.items():
+                if outcome_col:
+                    rates = engine.compute_approval_rates_by_group(df, col, outcome_col, field_name=field)
+                    if rates:
+                        rates_str = ', '.join(f"{g}: {r:.1%}" for g, r in sorted(rates.items()))
+                        lines.append(f"Approval rates by {field} ({col}): {rates_str}")
+
+            # Numeric column stats
+            numeric_cols = df.select_dtypes(include=['number']).columns[:6]
+            for col in numeric_cols:
+                if col not in [outcome_col]:
+                    lines.append(f"{col}: min={df[col].min():.0f}, max={df[col].max():.0f}, mean={df[col].mean():.0f}")
+
+            return '\n'.join(lines)
+        except Exception as e:
+            import logging
+            logging.getLogger("fair_lending.rag").warning(f"Dataset summary failed: {e}")
+            return ""
 
     def get_history(self, session_id: str) -> List[ChatMessage]:
         return list(self._session_memory.get(session_id, []))
