@@ -128,8 +128,7 @@ async def generate_compliance_report(
 ):
     """Generate an HMDA compliance summary report."""
     df = _get_df(request.dataset_id)
-    field_map = _dataset_field_maps.get(request.dataset_id)
-    content = _get_report_gen().generate_compliance_report(df, field_map, fmt=format)
+    content = _get_report_gen().generate_compliance_report(df, None, fmt=format)
     fname = _filename(f"compliance_report_{request.dataset_id}", format)
     try:
         from backend.database.crud import create_report, get_dataset_by_file_id
@@ -153,7 +152,6 @@ async def generate_risk_report(
 ):
     """Generate a risk assessment report. Works with or without prior ML training."""
     df = _get_df(request.dataset_id)
-    field_map = _dataset_field_maps.get(request.dataset_id)
 
     # Try to use cached predictions first
     predictions = _predictions_cache.get(request.dataset_id, [])
@@ -163,15 +161,15 @@ async def generate_risk_report(
         try:
             ml = _get_ml_engine()
             if ml:
-                result = ml.train(df, field_map)
-                predictions = ml.predict_batch(df, field_map)
+                result = ml.train(df, None)
+                predictions = ml.predict_batch(df, None)
                 _predictions_cache[request.dataset_id] = predictions
         except Exception:
             predictions = []
 
     # If still no predictions, generate a dataset-stats-based risk report
     if not predictions:
-        content = _get_report_gen().generate_risk_report_from_df(df, field_map, fmt=format)
+        content = _get_report_gen().generate_risk_report_from_df(df, None, fmt=format)
     else:
         content = _get_report_gen().generate_risk_report(predictions, fmt=format)
 
