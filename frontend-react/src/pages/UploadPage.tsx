@@ -9,7 +9,7 @@ import { safeFormatDistance } from '../lib/utils'
 import toast from 'react-hot-toast'
 import {
   Upload, FileText, CheckCircle, XCircle, Clock, Loader2,
-  Database, BarChart3, CheckSquare, Wifi, ShieldCheck, ChevronDown, ChevronUp, Rows3
+  Database, BarChart3, CheckSquare, Wifi, ShieldCheck, ChevronDown, ChevronUp, Rows3, Trash2
 } from 'lucide-react'
 import { useTaskProgress, type WSEvent } from '../hooks/useWebSocket'
 
@@ -347,12 +347,46 @@ export default function UploadPage() {
                           >
                             {expandedId === u.file_id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                           </button>
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Delete "${u.filename}"? This cannot be undone.`)) return
+                              try {
+                                await api.delete(`/upload/dataset/${u.file_id}`)
+                                toast.success(`${u.filename} deleted`)
+                                if (selectedId === u.file_id) setSelected(null)
+                                queryClient.invalidateQueries({ queryKey: ['uploads-all'] })
+                                queryClient.invalidateQueries({ queryKey: ['datasets'] })
+                              } catch { toast.error('Failed to delete dataset') }
+                            }}
+                            className="flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete dataset"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
-                      {u.status === 'failed' && u.error_message && (
-                        <span className="text-xs text-red-500 truncate max-w-32 block" title={u.error_message}>
-                          {u.error_message.substring(0, 40)}…
-                        </span>
+                      {u.status === 'failed' && (
+                        <div className="flex items-center gap-1.5">
+                          {u.error_message && (
+                            <span className="text-xs text-red-500 truncate max-w-28 block" title={u.error_message}>
+                              {u.error_message.substring(0, 35)}…
+                            </span>
+                          )}
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`Delete "${u.filename}"?`)) return
+                              try {
+                                await api.delete(`/upload/dataset/${u.file_id}`)
+                                toast.success('Deleted')
+                                queryClient.invalidateQueries({ queryKey: ['uploads-all'] })
+                              } catch { toast.error('Failed to delete') }
+                            }}
+                            className="flex items-center text-xs px-2 py-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
