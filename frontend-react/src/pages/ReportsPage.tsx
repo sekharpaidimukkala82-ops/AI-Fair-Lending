@@ -66,24 +66,19 @@ export default function ReportsPage() {
   const generateMutation = useMutation({
     mutationFn: async ({ reportType, format }: { reportType: string; format: string }) => {
       if (!selectedId) throw new Error('No dataset selected')
-      const token = localStorage.getItem('access_token')
-      const resp = await fetch(`/api/v1/reports/${reportType}?format=${format}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ dataset_id: selectedId }),
+      // Use axios api instance so VITE_API_URL is respected (fixes local dev port mismatch)
+      const resp = await api.post(
+        `/reports/${reportType}?format=${format}`,
+        { dataset_id: selectedId },
+        { responseType: 'blob' }
+      )
+      const blob = new Blob([resp.data], {
+        type: format === 'pdf' ? 'application/pdf' : 'application/json'
       })
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ detail: 'Report generation failed' }))
-        throw new Error(err.detail || 'Report generation failed')
-      }
-      const blob = await resp.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${reportType}_report.${format}`
+      a.download = `${reportType}_report_${selectedId?.slice(0, 8)}.${format}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
