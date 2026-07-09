@@ -39,8 +39,7 @@ def _get_fairness_engine():
             _get_fairness_engine._instance = None
     return _get_fairness_engine._instance
 
-# Shared dataset store (same reference as fairness.py – in production use a proper store)
-from backend.api.routes.fairness import _datasets, _dataset_field_maps
+# Stateless — no shared in-memory dicts needed
 from backend.api.routes.ml import _get_ml_engine, _predictions_cache
 
 
@@ -71,29 +70,9 @@ class ExecutiveSummaryRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 def _get_df(dataset_id: str) -> pd.DataFrame:
-    from backend.api.routes.fairness import _datasets
-    df = _datasets.get(dataset_id)
-    if df is None:
-        # Try loading from disk on server restart
-        try:
-            from backend.config import Config
-            upload_dir = Path(Config.UPLOAD_DIR)
-            for f in upload_dir.iterdir():
-                if f.name.startswith(dataset_id):
-                    ext = f.suffix.lower()
-                    if ext == ".csv":
-                        df = pd.read_csv(f)
-                    elif ext == ".xlsx":
-                        df = pd.read_excel(f, engine="openpyxl")
-                    elif ext == ".json":
-                        df = pd.read_json(f)
-                    if df is not None:
-                        _datasets[dataset_id] = df
-                        return df
-        except Exception:
-            pass
-        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found.")
-    return df
+    """Stateless disk loader — same as fairness route."""
+    from backend.api.routes.fairness import _load_dataset
+    return _load_dataset(dataset_id)
 
 
 def _content_type(fmt: str) -> str:
