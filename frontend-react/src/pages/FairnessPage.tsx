@@ -4,7 +4,7 @@ import { useDatasetStore } from '../store/datasetStore'
 import api from '../lib/api'
 import toast from 'react-hot-toast'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, LabelList, Cell
 } from 'recharts'
 import {
   BarChart3, AlertTriangle, CheckCircle, Shield, Brain, Loader2,
@@ -259,30 +259,42 @@ export default function FairnessPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {raceChartData.length > 0 && (
               <div className="card p-5">
-                <h3 className="font-semibold text-gray-800 mb-4">Approval Rates by Race</h3>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={raceChartData} margin={{ top: 5, right: 10, left: 0, bottom: 40 }}>
+                <h3 className="font-semibold text-gray-800 mb-1">Approval Rates by Race</h3>
+                <p className="text-xs text-gray-500 mb-4">Red bars are below the 80% fairness threshold (4/5ths rule)</p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={raceChartData} margin={{ top: 20, right: 10, left: 0, bottom: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="group" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
                     <Tooltip formatter={(v: number) => [`${v}%`, 'Approval Rate']} />
-                    <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '4/5ths', position: 'right', fontSize: 10 }} />
-                    <Bar dataKey="rate" fill="#1a237e" radius={[4, 4, 0, 0]} />
+                    <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '80% threshold', position: 'right', fontSize: 10, fill: '#ef4444' }} />
+                    <Bar dataKey="rate" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="rate" position="top" formatter={(v: number) => `${v}%`} style={{ fontSize: 11, fontWeight: 600, fill: '#374151' }} />
+                      {raceChartData.map((entry, index) => (
+                        <Cell key={index} fill={entry.rate >= 80 ? '#1a237e' : '#ef4444'} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
             {genderChartData.length > 0 && (
               <div className="card p-5">
-                <h3 className="font-semibold text-gray-800 mb-4">Approval Rates by Gender</h3>
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={genderChartData} margin={{ top: 5, right: 10, left: 0, bottom: 40 }}>
+                <h3 className="font-semibold text-gray-800 mb-1">Approval Rates by Gender</h3>
+                <p className="text-xs text-gray-500 mb-4">Red bars are below the 80% fairness threshold (4/5ths rule)</p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={genderChartData} margin={{ top: 20, right: 10, left: 0, bottom: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis dataKey="group" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
                     <Tooltip formatter={(v: number) => [`${v}%`, 'Approval Rate']} />
-                    <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '4/5ths', position: 'right', fontSize: 10 }} />
-                    <Bar dataKey="rate" fill="#3f51b5" radius={[4, 4, 0, 0]} />
+                    <ReferenceLine y={80} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '80% threshold', position: 'right', fontSize: 10, fill: '#ef4444' }} />
+                    <Bar dataKey="rate" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="rate" position="top" formatter={(v: number) => `${v}%`} style={{ fontSize: 11, fontWeight: 600, fill: '#374151' }} />
+                      {genderChartData.map((entry, index) => (
+                        <Cell key={index} fill={entry.rate >= 80 ? '#3f51b5' : '#ef4444'} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
