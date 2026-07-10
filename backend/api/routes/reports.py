@@ -373,3 +373,86 @@ async def list_reports(
         }
     except Exception as e:
         return {"reports": []}
+
+
+@router.post("/executive-summary")
+async def generate_executive_summary(
+    request: ExecutiveSummaryRequest,
+    format: str = Query(default="pdf", pattern="^(pdf|json)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Generate executive summary. ALWAYS succeeds — never returns 404."""
+    summary: Dict[str, Any] = {}
+
+    if request.dataset_id:
+        # Step 1: try to get data from file
+        df = _get_df_safe(request.dataset_id)
+
+        if df is not None:
+            summary["total_records"] = len(df)
+            summary["total_fields"] = len(df.columns)
+            try:
+                fairness_report = _get_fairness_engine().generate_audit(df, None, dataset_id=request.dataset_id)
+                summary["fairness_score"] = fairness_report.score
+                summary["disparate_impact_ratios"] = fairness_report.disparate_impact_ratios
+                summary["approval_rates_by_group"] = fairness_report.approval_rates_by_group
+                summary["bias_indicators"] = [b.model_dump() for b in fairness_report.bias_indicators]
+                summary["findings"] = fairness_report.findings
+                summary["recommendations"] = fairness_report.recommendations
+            except Exception as e:
+                summary["findings"] = [f"Fairness analysis failed: {e}"]
+                summary["recommendations"] = ["Try re-running the fairness audit."]
+        else:
+            # Step 2: file missing — use DB data
+            try:
+                from backend.database.crud import get_dataset_by_file_id, list_fairness_audits
+                ds = await get_dataset_by_file_id(db, request.dataset_id)
+                if ds:
+                    summary["dataset_name"] = ds.filename
+                    summary["total_records"] = ds.total_rows or 0
+                    summary["total_fields"] = ds.total_columns or 0
+                    summary["quality_score"] = ds.quality_score or 0
+                    audits = await list_fairness_audits(db, ds.id)
+                    if audits:
+                        a = audits[0]
+                        summary["fairness_score"] = a.fairness_score or 0
+                        summary["disparate_impact_ratios"] = a.disparate_impact_ratios or {}
+                        summary["approval_rates_by_group"] = a.approval_rates_by_group or {}
+                        summary["bias_indicators"] = a.bias_indicators or []
+                        summary["findings"] = a.findings or []
+                        summary["recommendations"] = a.recommendations or []
+                    else:
+                        summary["findings"] = ["No previous fairness audit found for this dataset."]
+                        summary["recommendations"] = ["Run a Fairness Audit first to get detailed findings."]
+                else:
+                    summary["findings"] = ["Dataset record not found in database."]
+                    summary["recommendations"] = ["Re-upload the dataset and run a Fairness Audit."]
+            except Exception as e:
+                summary["findings"] = [f"Could not load dataset data: {e}"]
+                summary["recommendations"] = ["Re-upload the dataset to generate a full report."]
+
+    if not summary:
+        summary = {
+            "findings": ["No dataset selected."],
+            "recommendations": ["Select a dataset from the top bar and run a Fairness Audit."],
+        }
+
+    content = _get_report_gen().generate_executive_summary(summary, fmt=format)
+    fname = _filename("executive_summary", format)
+
+    try:
+        from backend.database.crud import create_report, get_dataset_by_file_id
+        if request.dataset_id:
+            ds = await get_dataset_by_file_id(db, request.dataset_id)
+            if ds:
+                await create_report(db, {
+                    "dataset_id": ds.id, "report_type": "executive", "format": format,
+                    "generated_by_id": current_user.id if current_user else None,
+                    "file_size": len(content),
+                })
+    except Exception:
+        pass
+
+    return Response(content=content, media_type=_content_type(format),
+                    headers={"Content-Disposition": f"attachment; filename={fname}"})
