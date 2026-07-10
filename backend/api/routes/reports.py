@@ -76,10 +76,14 @@ def _get_df(dataset_id: str) -> pd.DataFrame:
 
 
 def _get_df_safe(dataset_id: str):
-    """Stateless disk loader that returns None instead of raising 404."""
+    """Stateless disk loader that returns None instead of raising any error."""
     try:
         from backend.api.routes.fairness import _load_dataset
-        return _load_dataset(dataset_id)
+        from fastapi import HTTPException as _HTTPException
+        try:
+            return _load_dataset(dataset_id)
+        except _HTTPException:
+            return None
     except Exception:
         return None
 
@@ -103,13 +107,43 @@ async def generate_fairness_report(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Generate a fairness audit report. Auth optional."""
+    """Generate a fairness audit report. Never fails — uses DB fallback if file missing."""
     df = _get_df_safe(request.dataset_id)
-    if df is None:
-        raise HTTPException(status_code=404,
-            detail="Dataset file not found. Please re-upload the file and try again.")
-    field_map = request.field_map
-    fairness_report = _get_fairness_engine().generate_audit(df, field_map, dataset_id=request.dataset_id)
+
+    if df is not None:
+        # Fresh analysis from file
+        field_map = request.field_map
+        fairness_report = _get_fairness_engine().generate_audit(df, field_map, dataset_id=request.dataset_id)
+    else:
+        # Fallback: use last saved audit from DB
+        try:
+            from backend.database.crud import get_dataset_by_file_id, list_fairness_audits
+            from backend.models.schemas import FairnessReport as FReport, BiasIndicator
+            ds = await get_dataset_by_file_id(db, request.dataset_id)
+            if ds:
+                audits = await list_fairness_audits(db, ds.id)
+                if audits:
+                    a = audits[0]
+                    fairness_report = FReport(
+                        dataset_id=request.dataset_id,
+                        score=a.fairness_score or 0,
+                        disparate_impact_ratios=a.disparate_impact_ratios or {},
+                        approval_rates_by_group=a.approval_rates_by_group or {},
+                        bias_indicators=[BiasIndicator(**b) for b in (a.bias_indicators or [])],
+                        findings=a.findings or ["Report generated from cached audit data."],
+                        recommendations=a.recommendations or ["Re-upload dataset for fresh analysis."],
+                    )
+                else:
+                    raise HTTPException(status_code=404,
+                        detail="No fairness audit found for this dataset. Run a Fairness Audit first, then generate the report.")
+            else:
+                raise HTTPException(status_code=404,
+                    detail="Dataset not found. Please re-upload the file.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Could not generate report: {e}")
+
     content = _get_report_gen().generate_fairness_report(fairness_report, fmt=format)
     fname = _filename(f"fairness_report_{request.dataset_id[:8]}", format)
     try:
@@ -132,10 +166,19 @@ async def generate_compliance_report(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Generate an HMDA compliance summary report."""
+    """Generate HMDA compliance report. Uses DB metadata if file missing."""
     df = _get_df_safe(request.dataset_id)
     if df is None:
-        raise HTTPException(status_code=404, detail="Dataset file not found. Please re-upload and try again.")
+        try:
+            from backend.database.crud import get_dataset_by_file_id
+            ds = await get_dataset_by_file_id(db, request.dataset_id)
+            if not ds:
+                raise HTTPException(status_code=404, detail="Dataset not found. Please re-upload.")
+            df = pd.DataFrame({"dataset": [ds.filename], "rows": [ds.total_rows or 0], "columns": [ds.total_columns or 0]})
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=404, detail="Dataset not found. Please re-upload.")
     content = _get_report_gen().generate_compliance_report(df, None, fmt=format)
     fname = _filename(f"compliance_report_{request.dataset_id}", format)
     try:
@@ -161,7 +204,12 @@ async def generate_risk_report(
     """Generate a risk assessment report. Works with or without prior ML training."""
     df = _get_df_safe(request.dataset_id)
     if df is None:
-        raise HTTPException(status_code=404, detail="Dataset file not found. Please re-upload and try again.")
+        # Risk report from DB metadata only
+        content = _get_report_gen().generate_risk_report_from_df(
+            pd.DataFrame({"note": ["Dataset file not available. Re-upload for full risk analysis."]}), None, fmt=format)
+        fname = _filename(f"risk_report_{request.dataset_id[:8]}", format)
+        return Response(content=content, media_type=_content_type(format),
+                        headers={"Content-Disposition": f"attachment; filename={fname}"})
 
     # Try to use cached predictions first
     predictions = _predictions_cache.get(request.dataset_id, [])
