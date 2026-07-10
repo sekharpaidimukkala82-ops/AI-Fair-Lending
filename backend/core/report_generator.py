@@ -767,131 +767,273 @@ class ReportGenerator:
         doc = _build_doc(buffer, "Fair Lending Executive Summary")
         story = []
 
+        dataset_name = all_data.get("dataset_name", all_data.get("dataset_id", "Uploaded Dataset"))
+        total_records = all_data.get("total_records", 0)
+        score = float(all_data.get("fairness_score", 0))
+        di = all_data.get("disparate_impact_ratios", {})
+        approval = all_data.get("approval_rates_by_group", {})
+        bias = all_data.get("bias_indicators", [])
+        findings = all_data.get("findings", [])
+        recs = all_data.get("recommendations", [])
+
         story.append(Spacer(1, 0.2 * inch))
-        story.append(self._p("FAIR LENDING EXECUTIVE SUMMARY", "ReportTitle"))
+        story.append(self._p("FAIR LENDING & ML ANALYSIS REPORT", "ReportTitle"))
         story.append(self._p(
-            f"Generated: {datetime.utcnow().strftime('%B %d, %Y %H:%M UTC')}   |   "
-            f"Dataset: {all_data.get('dataset_name', all_data.get('dataset_id', 'N/A'))}",
+            f"Generated: {datetime.utcnow().strftime('%B %d, %Y %H:%M UTC')}   |   Dataset: {dataset_name}",
             "BodyText2",
         ))
         story.append(HRFlowable(width="100%", thickness=2, color=NAVY, spaceAfter=12))
 
-        # ── Key Metrics ──
+        # ── Executive Summary Narrative ────────────────────────────────────
+        story.extend(self._section("Executive Summary"))
+
+        failing = [f for f, r in di.items() if float(r) < 0.80]
+        passing = [f for f, r in di.items() if float(r) >= 0.80]
+
+        if score >= 80:
+            verdict = "no confirmed disparate impact violations at standard group level."
+        elif score >= 60:
+            verdict = f"moderate fairness concerns — {len(failing)} protected class(es) below the 80% threshold."
+        else:
+            verdict = f"significant disparate impact violations — {len(failing)} protected class(es) require immediate attention."
+
+        narrative = (
+            f"This dataset contains {total_records:,} loan application records. "
+            f"The overall fairness analysis shows {verdict} "
+        )
+        if failing:
+            narrative += (
+                f"The following protected attributes fall below the 4/5ths rule threshold: "
+                f"{', '.join(f.capitalize() for f in failing)}. "
+            )
+            for f in failing:
+                rates = approval.get(f, {})
+                if rates:
+                    best = max(rates, key=lambda k: float(rates[k]))
+                    worst = min(rates, key=lambda k: float(rates[k]))
+                    di_val = float(di.get(f, 0))
+                    narrative += (
+                        f"{f.capitalize()}: {worst} applicants are approved at {float(rates[worst]):.1%} "
+                        f"vs {best} at {float(rates[best]):.1%} (DI ratio {di_val:.3f}). "
+                    )
+        if passing:
+            narrative += f"{', '.join(f.capitalize() for f in passing)} pass the 4/5ths rule. "
+
+        story.append(self._p(narrative, "BodyText2"))
+        story.append(Spacer(1, 0.08 * inch))
+
+        # Bottom-line points
+        story.append(self._p("<b>Bottom Line:</b>", "BodyText2"))
+        bottom_lines = []
+        if not failing:
+            bottom_lines.append("No confirmed disparate impact violations at standard group level.")
+        else:
+            for f in failing:
+                r = float(di.get(f, 0))
+                rates = approval.get(f, {})
+                if rates:
+                    best_grp = max(rates, key=lambda k: float(rates[k]))
+                    worst_grp = min(rates, key=lambda k: float(rates[k]))
+                    bottom_lines.append(
+                        f"{f.capitalize()}: DI ratio {r:.3f} — {worst_grp} approved at "
+                        f"{float(rates[worst_grp]):.1%} vs {best_grp} at {float(rates[best_grp]):.1%}. "
+                        f"Below 80% threshold — requires investigation."
+                    )
+        bottom_lines.append(f"{len(bias)} bias indicator(s) flagged." if bias else "No bias indicators flagged.")
+        for item in bottom_lines:
+            story.append(self._p(f"• {item}", "Finding"))
+        story.append(Spacer(1, 0.1 * inch))
+
+        # ── Portfolio Overview ─────────────────────────────────────────────
         story.extend(self._section("Portfolio Overview"))
         kpi_data = [["Metric", "Value", "Status"]]
-        if all_data.get("total_records"):
-            kpi_data.append(["Total Applications", f"{all_data['total_records']:,}", "—"])
-        if all_data.get("fairness_score") is not None:
-            score = float(all_data["fairness_score"])
-            status = "ACCEPTABLE" if score >= 80 else "NEEDS ATTENTION" if score >= 60 else "HIGH RISK"
-            kpi_data.append(["Fairness Score", f"{score:.1f}/100", status])
+        if total_records:
+            kpi_data.append(["Total Applications", f"{total_records:,}", "—"])
         if all_data.get("quality_score"):
             kpi_data.append(["Data Quality Score", f"{all_data['quality_score']:.1f}%", "—"])
-        if all_data.get("model_approval_rate"):
-            kpi_data.append(["Model Approval Rate", f"{all_data['model_approval_rate']}%", "—"])
+        if score is not None:
+            s = float(score)
+            kpi_data.append(["Fairness Score", f"{s:.1f}/100",
+                             "ACCEPTABLE" if s >= 80 else "NEEDS ATTENTION" if s >= 60 else "HIGH RISK"])
+        kpi_data.append(["Protected Classes Analyzed", str(len(di)), ", ".join(di.keys()) or "—"])
+        kpi_data.append(["Bias Indicators Flagged", str(len(bias)),
+                         "None" if not bias else f"{sum(1 for b in bias if (b.get('severity') if isinstance(b,dict) else b.severity) == 'critical')} critical"])
+        kpi_data.append(["Regulatory Standard", "4/5ths Rule (80%)", "CFPB / Reg B / ECOA / FHA"])
 
-        if len(kpi_data) > 1:
-            t = Table(kpi_data, colWidths=[2.5 * inch, 2.0 * inch, 2.5 * inch])
-            style = _table_style()
-            for i, row in enumerate(kpi_data[1:], 1):
-                if "HIGH RISK" in str(row[2]):
-                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFEBEE"))
-                elif "NEEDS ATTENTION" in str(row[2]):
-                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFF9C4"))
-                elif "ACCEPTABLE" in str(row[2]):
-                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#E8F5E9"))
-            t.setStyle(style)
-            story.append(t)
-            story.append(Spacer(1, 0.1 * inch))
+        t = Table(kpi_data, colWidths=[2.5*inch, 1.8*inch, 2.7*inch])
+        style = _table_style()
+        for i, row in enumerate(kpi_data[1:], 1):
+            if "HIGH RISK" in str(row[2]):
+                style.add("BACKGROUND", (0,i), (-1,i), colors.HexColor("#FFEBEE"))
+            elif "NEEDS ATTENTION" in str(row[2]):
+                style.add("BACKGROUND", (0,i), (-1,i), colors.HexColor("#FFF9C4"))
+            elif "ACCEPTABLE" in str(row[2]):
+                style.add("BACKGROUND", (0,i), (-1,i), colors.HexColor("#E8F5E9"))
+        t.setStyle(style)
+        story.append(t)
+        story.append(Spacer(1, 0.1*inch))
 
-        # ── Disparate Impact ──
-        di = all_data.get("disparate_impact_ratios", {})
+        # ── Disparate Impact ───────────────────────────────────────────────
         if di:
-            story.extend(self._section("Disparate Impact Summary"))
-            di_data = [["Protected Class", "DI Ratio", "4/5ths Status"]]
+            story.extend(self._section("Disparate Impact Analysis"))
+            story.append(self._p(
+                "For each protected-class group, the approval rate is divided by the approval rate of "
+                "the highest-approval reference group. A ratio below 0.80 is the standard regulatory "
+                "threshold (4/5ths rule) for a potential disparate impact concern under ECOA and FHA.",
+                "BodyText2",
+            ))
+            story.append(Spacer(1, 0.06*inch))
+            di_data = [["Protected Class", "DI Ratio", "4/5ths Status", "Approval Rate Range"]]
             for field, ratio in sorted(di.items(), key=lambda x: float(x[1])):
                 r = float(ratio)
-                di_data.append([field.capitalize(), f"{r:.3f}", "PASS ✓" if r >= 0.80 else "FAIL ✗"])
-            t = Table(di_data, colWidths=[2.0 * inch, 2.0 * inch, 2.5 * inch])
+                rates = approval.get(field, {})
+                note = ""
+                if rates:
+                    best = max(rates, key=lambda k: float(rates[k]))
+                    worst = min(rates, key=lambda k: float(rates[k]))
+                    note = f"{worst}: {float(rates[worst]):.1%} – {best}: {float(rates[best]):.1%}"
+                di_data.append([field.capitalize(), f"{r:.3f}", "PASS ✓" if r >= 0.80 else "FAIL ✗", note])
+            t = Table(di_data, colWidths=[1.4*inch, 1.0*inch, 1.0*inch, 3.6*inch])
             style = _table_style()
             for i, row in enumerate(di_data[1:], 1):
                 if "FAIL" in row[2]:
-                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFEBEE"))
-                    style.add("TEXTCOLOR", (2, i), (2, i), RED)
+                    style.add("BACKGROUND", (0,i), (-1,i), colors.HexColor("#FFEBEE"))
+                    style.add("TEXTCOLOR", (2,i), (2,i), RED)
                 else:
-                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#E8F5E9"))
-                    style.add("TEXTCOLOR", (2, i), (2, i), GREEN)
+                    style.add("BACKGROUND", (0,i), (-1,i), colors.HexColor("#E8F5E9"))
+                    style.add("TEXTCOLOR", (2,i), (2,i), GREEN)
             t.setStyle(style)
             story.append(t)
-            # DI bar chart
             try:
                 chart = self._bar_chart(
-                    {k: float(v) for k, v in di.items()},
-                    "Disparate Impact Ratios", width=6.5,
-                    height=max(1.5, len(di) * 0.4), threshold=0.80
+                    {k: float(v) for k,v in di.items()},
+                    "Disparate Impact Ratios by Protected Class",
+                    width=6.5, height=max(1.5, len(di)*0.4), threshold=0.80
                 )
-                story.append(Spacer(1, 0.06 * inch))
+                story.append(Spacer(1, 0.06*inch))
                 story.append(chart)
             except Exception:
                 pass
-            story.append(Spacer(1, 0.1 * inch))
+            story.append(Spacer(1, 0.1*inch))
 
-        # ── Approval Rates ──
-        approval = all_data.get("approval_rates_by_group", {})
+        # ── Approval Rates ─────────────────────────────────────────────────
         if approval:
             story.extend(self._section("Approval Rates by Demographic Group"))
+            story.append(self._p(
+                "Approval rates calculated on decisive outcomes only (Approved/Denied). "
+                "Withdrawn, incomplete, and purchased applications excluded per CFPB methodology.",
+                "BodyText2",
+            ))
+            story.append(Spacer(1, 0.06*inch))
             for field, rates in approval.items():
-                if not rates:
-                    continue
+                if not rates: continue
                 story.append(self._p(field.capitalize(), "SubHeading"))
+                max_rate = max(float(v) for v in rates.values())
+                rate_data = [["Group", "Approval Rate", "DI vs Best", "Status"]]
+                for grp, rate in sorted(rates.items(), key=lambda x: float(x[1]), reverse=True):
+                    r = float(rate)
+                    di_vs = r / max_rate if max_rate > 0 else 1.0
+                    status = "Reference" if abs(di_vs - 1.0) < 0.001 else ("PASS" if di_vs >= 0.80 else "BELOW THRESHOLD")
+                    rate_data.append([str(grp), f"{r:.1%}", f"{di_vs:.3f}", status])
+                t = Table(rate_data, colWidths=[2.0*inch, 1.5*inch, 1.5*inch, 2.0*inch])
+                style = _table_style()
+                for i, row in enumerate(rate_data[1:], 1):
+                    if row[3] == "BELOW THRESHOLD":
+                        style.add("BACKGROUND", (0,i), (-1,i), colors.HexColor("#FFEBEE"))
+                        style.add("TEXTCOLOR", (3,i), (3,i), RED)
+                    elif row[3] == "Reference":
+                        style.add("BACKGROUND", (0,i), (-1,i), colors.HexColor("#E3F2FD"))
+                t.setStyle(style)
+                story.append(t)
                 try:
                     chart = self._bar_chart(
-                        {str(k): float(v) for k, v in rates.items()},
+                        {str(k): float(v) for k,v in rates.items()},
                         f"Approval Rate by {field.capitalize()}",
-                        width=6.5, height=max(1.5, len(rates) * 0.35), threshold=0.80
+                        width=6.5, height=max(1.5, len(rates)*0.35), threshold=0.80
                     )
+                    story.append(Spacer(1, 0.06*inch))
                     story.append(chart)
-                    story.append(Spacer(1, 0.06 * inch))
                 except Exception:
                     pass
+                story.append(Spacer(1, 0.08*inch))
 
-        # ── Bias Indicators ──
-        bias = all_data.get("bias_indicators", [])
+        # ── Bias Indicators ────────────────────────────────────────────────
         if bias:
-            story.extend(self._section(f"Bias Indicators ({len(bias)} flagged)"))
+            story.extend(self._section(f"Bias Indicators ({len(bias)} Flagged)"))
+            story.append(self._p(
+                "Severity levels: Critical (<60% of reference group), High (60–70%), Medium (70–80%). "
+                "Each indicator represents a group whose approval rate falls materially below the "
+                "highest-approval reference group.",
+                "BodyText2",
+            ))
+            story.append(Spacer(1, 0.06*inch))
             bi_data = [["Protected Class", "Group", "DI Ratio", "Severity"]]
-            for ind in (bias if isinstance(bias[0], dict) else [b.model_dump() for b in bias]):
-                bi_data.append([
-                    str(ind.get("field", "")).capitalize(),
-                    str(ind.get("group", "")),
-                    f"{float(ind.get('value', 0)):.3f}",
-                    str(ind.get("severity", "")).upper(),
-                ])
-            t = Table(bi_data, colWidths=[1.5 * inch, 1.8 * inch, 1.2 * inch, 1.2 * inch])
+            for ind in bias:
+                if isinstance(ind, dict):
+                    bi_data.append([str(ind.get("field","")).capitalize(), str(ind.get("group","")),
+                                    f"{float(ind.get('value',0)):.3f}", str(ind.get("severity","")).upper()])
+                else:
+                    bi_data.append([ind.field.capitalize(), str(ind.group), f"{ind.value:.3f}", ind.severity.upper()])
+            t = Table(bi_data, colWidths=[1.5*inch, 1.8*inch, 1.2*inch, 2.0*inch])
             sev_colors = {"CRITICAL": colors.HexColor("#FFCDD2"), "HIGH": colors.HexColor("#FFE0B2"), "MEDIUM": colors.HexColor("#FFF9C4")}
             style = _table_style()
             for i, row in enumerate(bi_data[1:], 1):
-                style.add("BACKGROUND", (0, i), (-1, i), sev_colors.get(row[3], colors.white))
+                style.add("BACKGROUND", (0,i), (-1,i), sev_colors.get(row[3], colors.white))
             t.setStyle(style)
             story.append(t)
-            story.append(Spacer(1, 0.1 * inch))
+            story.append(Spacer(1, 0.1*inch))
 
-        # ── Findings ──
-        findings = all_data.get("findings", [])
+        # ── Key Findings ───────────────────────────────────────────────────
         if findings:
             story.extend(self._section("Key Findings"))
             for f in findings:
                 story.append(self._p(f"• {f}", "Finding"))
-            story.append(Spacer(1, 0.08 * inch))
+            story.append(Spacer(1, 0.08*inch))
 
-        # ── Recommendations ──
-        recs = all_data.get("recommendations", [])
+        # ── Recommendations ────────────────────────────────────────────────
         if recs:
             story.extend(self._section("Recommendations"))
             for r in recs:
                 story.append(self._p(f"• {r}", "Finding"))
+            story.append(Spacer(1, 0.08*inch))
 
-        # ── Error/note if dataset not on disk ──
+        # ── Methodology ────────────────────────────────────────────────────
+        story.extend(self._section("Methodology"))
+        story.append(self._p(
+            "<b>Outcome Definition:</b> Codes 'Originated' and 'Approved Not Accepted' treated as approved; "
+            "'Denied' as denied. Withdrawn, incomplete, and purchased loans excluded — these reflect applicant "
+            "behavior, not lender underwriting decisions.",
+            "BodyText2",
+        ))
+        story.append(Spacer(1, 0.04*inch))
+        story.append(self._p(
+            "<b>Disparate Impact Ratio:</b> Approval rate of each group divided by the highest-approval "
+            "reference group rate. Ratio below 0.80 is the 4/5ths rule threshold under CFPB Reg B. "
+            "Groups fewer than 30 records flagged as low-reliability.",
+            "BodyText2",
+        ))
+        story.append(Spacer(1, 0.04*inch))
+        story.append(self._p(
+            "<b>Fairness Score:</b> 100 − Σ(0.80 − DI_ratio) × 100 for each class where DI < 0.80. "
+            "Proportional and continuous — not flat buckets.",
+            "BodyText2",
+        ))
+        story.append(Spacer(1, 0.08*inch))
+
+        # ── Limitations ────────────────────────────────────────────────────
+        story.extend(self._section("Limitations"))
+        for lim in [
+            "The DI ratio is a screening tool, not a legal determination. A ratio below 0.80 warrants "
+            "investigation; it is not proof of discrimination, and a ratio above 0.80 does not rule out "
+            "other forms of bias.",
+            "Groups with fewer than 30 decisioned records have limited statistical reliability.",
+            "This report covers disparate impact at group level. It does not include Equalized Odds testing, "
+            "a full ECOA adverse action workflow, or a complete regulatory examination.",
+            "Consult qualified fair lending counsel before taking regulatory action based solely on this analysis.",
+        ]:
+            story.append(self._p(f"• {lim}", "Finding"))
+
+        # Note if no file data
         if all_data.get("error"):
             story.extend(self._section("Note"))
             story.append(self._p(str(all_data["error"]), "BodyText2"))
