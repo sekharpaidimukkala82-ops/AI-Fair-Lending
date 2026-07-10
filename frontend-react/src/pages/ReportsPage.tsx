@@ -43,7 +43,7 @@ const REPORT_TYPES = [
     color: 'bg-amber-500',
   },
   {
-    type: 'executive',
+    type: 'executive-summary',
     label: 'Executive Summary',
     desc: 'C-suite overview: portfolio performance, fairness KPIs, key recommendations.',
     icon: Users,
