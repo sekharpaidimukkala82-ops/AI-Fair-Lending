@@ -204,22 +204,19 @@ async def generate_executive_summary(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Generate a high-level executive summary. Always succeeds — degrades gracefully."""
+    """Generate a high-level executive summary. Always succeeds — never fails with 404."""
     summary_data: Dict[str, Any] = request.custom_data or {}
 
     if request.dataset_id:
+        # Try to load file — but don't fail if missing
         df = _get_df_safe(request.dataset_id)
 
         if df is not None:
             summary_data["dataset_id"] = request.dataset_id
             summary_data["total_records"] = len(df)
             summary_data["total_fields"] = len(df.columns)
-
-            # Fairness analysis
             try:
-                fairness_report = _get_fairness_engine().generate_audit(
-                    df, None, dataset_id=request.dataset_id
-                )
+                fairness_report = _get_fairness_engine().generate_audit(df, None, dataset_id=request.dataset_id)
                 summary_data["fairness_score"] = fairness_report.score
                 summary_data["findings"] = fairness_report.findings
                 summary_data["recommendations"] = fairness_report.recommendations
@@ -229,9 +226,7 @@ async def generate_executive_summary(
             except Exception as e:
                 summary_data["fairness_note"] = f"Fairness analysis unavailable: {e}"
                 summary_data["findings"] = []
-                summary_data["recommendations"] = ["Upload an HMDA or lending dataset for detailed findings."]
-
-            # ML predictions
+                summary_data["recommendations"] = ["Run Fairness Audit first for detailed findings."]
             try:
                 predictions = _predictions_cache.get(request.dataset_id, [])
                 if predictions:
@@ -243,9 +238,32 @@ async def generate_executive_summary(
             except Exception:
                 pass
         else:
-            summary_data["error"] = "Dataset file not found on disk. Please re-upload the dataset."
-            summary_data["findings"] = []
-            summary_data["recommendations"] = ["Re-upload the dataset to generate a full report."]
+            # File not on disk — use DB metadata for a partial report
+            try:
+                from backend.database.crud import get_dataset_by_file_id, list_fairness_audits
+                ds = await get_dataset_by_file_id(db, request.dataset_id)
+                if ds:
+                    summary_data["dataset_id"] = request.dataset_id
+                    summary_data["dataset_name"] = ds.filename
+                    summary_data["total_records"] = ds.total_rows or 0
+                    summary_data["total_fields"] = ds.total_columns or 0
+                    summary_data["quality_score"] = ds.quality_score or 0
+                    # Use last fairness audit from DB
+                    audits = await list_fairness_audits(db, ds.id)
+                    if audits:
+                        latest = audits[0]
+                        summary_data["fairness_score"] = latest.fairness_score or 0
+                        summary_data["disparate_impact_ratios"] = latest.disparate_impact_ratios or {}
+                        summary_data["approval_rates_by_group"] = latest.approval_rates_by_group or {}
+                        summary_data["findings"] = latest.findings or []
+                        summary_data["recommendations"] = latest.recommendations or []
+                        summary_data["bias_indicators"] = latest.bias_indicators or []
+                    else:
+                        summary_data["findings"] = ["No fairness audit found. Run a Fairness Audit first."]
+                        summary_data["recommendations"] = ["Upload the dataset and run Fairness Audit for full analysis."]
+            except Exception as e:
+                summary_data["findings"] = [f"Could not load dataset metadata: {e}"]
+                summary_data["recommendations"] = ["Re-upload the dataset to generate a full report."]
 
     if not summary_data:
         summary_data = {
@@ -257,7 +275,6 @@ async def generate_executive_summary(
 
     content = _get_report_gen().generate_executive_summary(summary_data, fmt=format)
     fname = _filename("executive_summary", format)
-
     try:
         from backend.database.crud import create_report, get_dataset_by_file_id
         if request.dataset_id:
@@ -270,6 +287,41 @@ async def generate_executive_summary(
                 })
     except Exception:
         pass
-
     return Response(content=content, media_type=_content_type(format),
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
+@router.get("/list")
+async def list_reports(
+    dataset_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """List generated reports for a dataset."""
+    try:
+        from backend.database.crud import list_reports as db_list_reports, get_dataset_by_file_id
+        from backend.database.models import Report
+        from sqlalchemy import select
+
+        q = select(Report).order_by(Report.created_at.desc())
+        if dataset_id:
+            ds = await get_dataset_by_file_id(db, dataset_id)
+            if ds:
+                q = q.where(Report.dataset_id == ds.id)
+        result = await db.execute(q.limit(20))
+        reports = result.scalars().all()
+        return {
+            "reports": [
+                {
+                    "id": r.id,
+                    "report_type": r.report_type,
+                    "format": r.format,
+                    "file_size": r.file_size,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "dataset_filename": dataset_id or "",
+                }
+                for r in reports
+            ]
+        }
+    except Exception as e:
+        return {"reports": []}

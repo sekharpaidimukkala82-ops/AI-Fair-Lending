@@ -57,10 +57,17 @@ export default function ReportsPage() {
   const [selectedFormat, setSelectedFormat] = useState<'pdf' | 'json'>('pdf')
   const [generatingType, setGeneratingType] = useState<string | null>(null)
 
-  const { data: recentReports = [] } = useQuery<ReportRecord[]>({
+  const { data: recentReports = [], refetch: refetchReports } = useQuery<ReportRecord[]>({
     queryKey: ['reports', selectedId],
-    queryFn: async () => [],  // No list endpoint — return empty
-    enabled: false,
+    queryFn: async () => {
+      if (!selectedId) return []
+      try {
+        const res = await api.get(`/reports/list?dataset_id=${selectedId}`)
+        return res.data?.reports || []
+      } catch { return [] }
+    },
+    enabled: !!selectedId,
+    refetchInterval: false,
   })
 
   const generateMutation = useMutation({
@@ -87,6 +94,7 @@ export default function ReportsPage() {
     },
     onSuccess: ({ reportType, format }) => {
       toast.success(`${reportType} report downloaded!`)
+      refetchReports()
     },
     onError: (err: any) => {
       const msg = err.response?.data?.detail || err.message || 'Report generation failed'
