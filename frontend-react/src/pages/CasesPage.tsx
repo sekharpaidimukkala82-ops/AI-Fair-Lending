@@ -1,331 +1,416 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ShieldAlert, Plus, MessageSquare, ChevronRight, User,
-  CheckCircle2, Clock, Search, AlertTriangle, X, Send
+  ShieldAlert, Plus, AlertTriangle, CheckCircle2, Clock,
+  X, Send, ChevronRight, User, Edit2, Trash2
 } from 'lucide-react'
 import { casesApi, type Case, type CaseComment } from '../lib/api'
-import { Alert, Spinner, EmptyState, Modal } from '../components/ui'
 import { useDataset } from '../hooks/useDataset'
-import { useAuth } from '../hooks/useAuth'
-import clsx from 'clsx'
+import api from '../lib/api'
+import toast from 'react-hot-toast'
 
-const SEVERITY_STYLES: Record<string, string> = {
-  low:      'badge bg-gray-500/15 text-gray-400',
-  medium:   'badge bg-warning/15 text-warning',
-  high:     'badge bg-orange-500/15 text-orange-400',
-  critical: 'badge bg-danger/15 text-danger',
+const SEV_COLOR: Record<string, string> = {
+  low:      'bg-gray-100 text-gray-600 border-gray-200',
+  medium:   'bg-amber-100 text-amber-700 border-amber-200',
+  high:     'bg-orange-100 text-orange-700 border-orange-200',
+  critical: 'bg-red-100 text-red-700 border-red-200',
 }
-const STATUS_STYLES: Record<string, string> = {
-  open:          'badge-danger',
-  investigating: 'badge-warning',
-  resolved:      'badge-success',
-  closed:        'badge-muted',
+const STATUS_COLOR: Record<string, string> = {
+  open:          'bg-red-100 text-red-700',
+  investigating: 'bg-amber-100 text-amber-700',
+  remediation:   'bg-blue-100 text-blue-700',
+  resolved:      'bg-green-100 text-green-700',
+  closed:        'bg-gray-100 text-gray-500',
 }
 const STATUS_ICON: Record<string, React.ReactNode> = {
   open:          <AlertTriangle className="w-3 h-3" />,
   investigating: <Clock className="w-3 h-3" />,
+  remediation:   <ChevronRight className="w-3 h-3" />,
   resolved:      <CheckCircle2 className="w-3 h-3" />,
   closed:        <X className="w-3 h-3" />,
 }
 
-function CaseCard({ c, onClick }: { c: Case; onClick: () => void }) {
-  return (
-    <div onClick={onClick} className="card p-4 cursor-pointer hover:border-white/15 transition-colors space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-gray-200 leading-snug flex-1">{c.title}</p>
-        <span className={SEVERITY_STYLES[c.severity]}>{c.severity}</span>
-      </div>
-      {c.description && (
-        <p className="text-xs text-gray-500 line-clamp-2">{c.description}</p>
-      )}
-      <div className="flex items-center gap-3 pt-1">
-        <span className={STATUS_STYLES[c.status] + ' flex items-center gap-1'}>
-          {STATUS_ICON[c.status]} {c.status}
-        </span>
-        {c.fairness_score != null && (
-          <span className="text-xs text-gray-500">Score: {(c.fairness_score * 100).toFixed(0)}%</span>
-        )}
-        <span className="text-xs text-gray-600 ml-auto">
-          {new Date(c.created_at).toLocaleDateString()}
-        </span>
-      </div>
-      {c.bias_indicators && c.bias_indicators.length > 0 && (
-        <p className="text-xs text-danger/70 truncate">{c.bias_indicators[0]}</p>
-      )}
-    </div>
-  )
-}
-
-function CommentTimeline({ caseId }: { caseId: string }) {
-  const { user } = useAuth()
-  const qc = useQueryClient()
-  const [text, setText] = useState('')
-
-  const { data: comments, isLoading } = useQuery({
-    queryKey: ['case-comments', caseId],
-    queryFn: () => casesApi.comments(caseId),
-  })
-
-  const addComment = useMutation({
-    mutationFn: (content: string) => casesApi.addComment(caseId, content),
-    onSuccess: () => {
-      setText('')
-      qc.invalidateQueries({ queryKey: ['case-comments', caseId] })
-    },
-  })
-
-  return (
-    <div className="space-y-4">
-      <p className="section-header">Activity Timeline</p>
-      {isLoading ? <Spinner size="sm" /> : (
-        <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-          {(comments || []).map((c: CaseComment) => (
-            <div key={c.id} className="flex gap-3">
-              <div className="w-6 h-6 rounded-full bg-surface-4 flex items-center justify-center shrink-0 mt-0.5">
-                <User className="w-3 h-3 text-gray-500" />
-              </div>
-              <div className="flex-1 bg-surface-3 rounded-lg px-3 py-2">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
-                  <span>{c.user_id ? c.user_id.slice(0, 8) : 'System'}</span>
-                  <span>{new Date(c.created_at).toLocaleString()}</span>
-                </div>
-                <p className="text-sm text-gray-300">{c.content}</p>
-              </div>
-            </div>
-          ))}
-          {!comments?.length && <p className="text-xs text-gray-600 text-center py-4">No activity yet</p>}
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <input
-          className="input flex-1 text-sm py-1.5"
-          value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder="Add a comment…"
-          onKeyDown={e => { if (e.key === 'Enter' && text.trim()) addComment.mutate(text.trim()) }}
-        />
-        <button
-          onClick={() => text.trim() && addComment.mutate(text.trim())}
-          disabled={!text.trim() || addComment.isPending}
-          className="btn-primary py-1.5 px-3"
-        >
-          {addComment.isPending ? <Spinner size="sm" /> : <Send className="w-4 h-4" />}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function CaseDetailModal({ c, onClose }: { c: Case; onClose: () => void }) {
-  const qc = useQueryClient()
+// ── Case Detail / Edit Panel ──────────────────────────────────────────────────
+function CaseDetail({ c, onClose, onUpdated }: { c: Case; onClose: () => void; onUpdated: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(c.title)
+  const [description, setDescription] = useState(c.description || '')
   const [status, setStatus] = useState(c.status)
-  const [assigned, setAssigned] = useState(c.assigned_to || '')
+  const [severity, setSeverity] = useState(c.severity)
+  const [assignedTo, setAssignedTo] = useState(c.assigned_to || '')
   const [remNotes, setRemNotes] = useState(c.remediation_notes || '')
   const [resNotes, setResNotes] = useState(c.resolution_notes || '')
+  const [comment, setComment] = useState('')
 
-  const update = useMutation({
-    mutationFn: (payload: Partial<Case>) => casesApi.update(c.id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cases'] })
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      try { const r = await api.get('/auth/users'); return r.data || [] }
+      catch { return [] }
     },
   })
+  const { data: comments = [], refetch: refetchComments } = useQuery({
+    queryKey: ['case-comments', c.id],
+    queryFn: () => casesApi.comments(c.id),
+  })
 
-  const save = () => update.mutate({ status, assigned_to: assigned || undefined, remediation_notes: remNotes, resolution_notes: resNotes })
+  const updateMutation = useMutation({
+    mutationFn: () => casesApi.update(c.id, { title, description, status, severity,
+      assigned_to: assignedTo || undefined, remediation_notes: remNotes, resolution_notes: resNotes }),
+    onSuccess: () => { setEditing(false); onUpdated(); toast.success('Case updated') },
+    onError: () => toast.error('Update failed'),
+  })
+
+  const commentMutation = useMutation({
+    mutationFn: () => casesApi.addComment(c.id, comment),
+    onSuccess: () => { setComment(''); refetchComments() },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => casesApi.delete(c.id),
+    onSuccess: () => { onClose(); onUpdated(); toast.success('Case deleted') },
+  })
 
   return (
-    <Modal open onClose={onClose} title={c.title}>
-      <div className="space-y-4">
-        <div className="flex gap-3 flex-wrap">
-          <span className={SEVERITY_STYLES[c.severity]}>{c.severity}</span>
-          {c.fairness_score != null && (
-            <span className="badge badge-info">Score: {(c.fairness_score * 100).toFixed(0)}%</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-start justify-between p-5 border-b border-gray-200">
+          <div className="flex-1 pr-4">
+            {editing ? (
+              <input className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-navy-900"
+                value={title} onChange={e => setTitle(e.target.value)} />
+            ) : (
+              <h2 className="font-semibold text-gray-900 text-lg">{c.title}</h2>
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border font-medium ${SEV_COLOR[c.severity]}`}>
+                {c.severity}
+              </span>
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLOR[c.status]}`}>
+                {STATUS_ICON[c.status]} {c.status}
+              </span>
+              {c.fairness_score != null && (
+                <span className="text-xs text-gray-500">Score: {c.fairness_score.toFixed(1)}/100</span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditing(!editing)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <Edit2 className="w-4 h-4" />
+            </button>
+            <button onClick={() => { if (confirm('Delete this case?')) deleteMutation.mutate() }} className="p-2 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50">
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Bias indicators */}
+          {c.bias_indicators && c.bias_indicators.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <p className="text-xs font-semibold text-red-700 mb-2">BIAS INDICATORS THAT TRIGGERED THIS CASE</p>
+              {c.bias_indicators.slice(0, 5).map((bi: any, i: number) => (
+                <p key={i} className="text-xs text-red-700 flex items-start gap-1.5">
+                  <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                  {typeof bi === 'string' ? bi : `${bi.field || ''} group '${bi.group || ''}': DI ratio ${bi.value || ''}`}
+                </p>
+              ))}
+            </div>
           )}
-        </div>
 
-        {c.description && <p className="text-sm text-gray-400">{c.description}</p>}
+          {/* Editable fields */}
+          {editing ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                <textarea rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-900 resize-none"
+                  value={description} onChange={e => setDescription(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                    value={status} onChange={e => setStatus(e.target.value as any)}>
+                    <option value="open">Open</option>
+                    <option value="investigating">Investigating</option>
+                    <option value="remediation">Remediation</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Severity</label>
+                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                    value={severity} onChange={e => setSeverity(e.target.value as any)}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Assign To</label>
+                {users.length > 0 ? (
+                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                    value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
+                    <option value="">— Unassigned —</option>
+                    {users.map((u: any) => <option key={u.id} value={u.id}>{u.full_name || u.username} ({u.role})</option>)}
+                  </select>
+                ) : (
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                    value={assignedTo} onChange={e => setAssignedTo(e.target.value)} placeholder="User ID or name" />
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Remediation Notes</label>
+                <textarea rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
+                  value={remNotes} onChange={e => setRemNotes(e.target.value)} placeholder="Steps taken to address the violation…" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Resolution Notes</label>
+                <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
+                  value={resNotes} onChange={e => setResNotes(e.target.value)} placeholder="How was this resolved?" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => updateMutation.mutate()} disabled={updateMutation.isPending}
+                  className="btn-primary flex items-center gap-2 text-sm">
+                  {updateMutation.isPending ? 'Saving…' : <><CheckCircle2 className="w-4 h-4"/> Save Changes</>}
+                </button>
+                <button onClick={() => setEditing(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {c.description && <p className="text-sm text-gray-600">{c.description}</p>}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-gray-400 text-xs">Assigned to:</span>
+                  <p className="font-medium text-gray-700">{c.assigned_to || 'Unassigned'}</p></div>
+                <div><span className="text-gray-400 text-xs">Created:</span>
+                  <p className="font-medium text-gray-700">{new Date(c.created_at).toLocaleDateString()}</p></div>
+              </div>
+              {c.remediation_notes && (
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-blue-700 mb-1">REMEDIATION NOTES</p>
+                  <p className="text-sm text-blue-800">{c.remediation_notes}</p>
+                </div>
+              )}
+              {c.resolution_notes && (
+                <div className="bg-green-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-green-700 mb-1">RESOLUTION</p>
+                  <p className="text-sm text-green-800">{c.resolution_notes}</p>
+                </div>
+              )}
+            </div>
+          )}
 
-        {c.bias_indicators && c.bias_indicators.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Bias Indicators</p>
-            {c.bias_indicators.map((bi, i) => (
-              <p key={i} className="text-xs text-danger/80 bg-danger/8 rounded px-2 py-1">{bi}</p>
-            ))}
+          {/* Comments timeline */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-sm font-semibold text-gray-700 mb-3">Activity Timeline</p>
+            <div className="space-y-3 max-h-48 overflow-y-auto mb-3">
+              {(comments as CaseComment[]).map((cm) => (
+                <div key={cm.id} className="flex gap-3">
+                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <User className="w-3.5 h-3.5 text-gray-400" />
+                  </div>
+                  <div className="flex-1 bg-gray-50 rounded-lg px-3 py-2">
+                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <span>{cm.user_id ? cm.user_id.slice(0, 8) + '…' : 'System'}</span>
+                      <span>{new Date(cm.created_at).toLocaleString()}</span>
+                    </div>
+                    <p className="text-sm text-gray-700">{cm.content}</p>
+                  </div>
+                </div>
+              ))}
+              {!comments.length && <p className="text-xs text-gray-400 text-center py-3">No activity yet — add a comment below</p>}
+            </div>
+            <div className="flex gap-2">
+              <input className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-900"
+                value={comment} onChange={e => setComment(e.target.value)}
+                placeholder="Add investigation note or update…"
+                onKeyDown={e => { if (e.key === 'Enter' && comment.trim()) commentMutation.mutate() }} />
+              <button onClick={() => comment.trim() && commentMutation.mutate()}
+                disabled={!comment.trim() || commentMutation.isPending}
+                className="btn-primary px-3 py-2">
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Status</label>
-            <select value={status} onChange={e => setStatus(e.target.value as Case['status'])} className="input text-sm">
-              <option value="open">Open</option>
-              <option value="investigating">Investigating</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Assigned To (User ID)</label>
-            <input className="input text-sm" value={assigned} onChange={e => setAssigned(e.target.value)} placeholder="user-id" />
-          </div>
-        </div>
-
-        <div>
-          <label className="label">Remediation Notes</label>
-          <textarea className="input text-sm resize-none" rows={3} value={remNotes} onChange={e => setRemNotes(e.target.value)} placeholder="Describe remediation steps taken…" />
-        </div>
-
-        <div>
-          <label className="label">Resolution Notes</label>
-          <textarea className="input text-sm resize-none" rows={2} value={resNotes} onChange={e => setResNotes(e.target.value)} placeholder="How was this resolved?" />
-        </div>
-
-        <button onClick={save} disabled={update.isPending} className="btn-primary w-full justify-center">
-          {update.isPending ? <Spinner size="sm" /> : <CheckCircle2 className="w-4 h-4" />} Save Changes
-        </button>
-
-        <div className="border-t border-white/5 pt-4">
-          <CommentTimeline caseId={c.id} />
         </div>
       </div>
-    </Modal>
+    </div>
   )
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function CasesPage() {
   const { activeDataset } = useDataset()
   const qc = useQueryClient()
-  const [selectedCase, setSelectedCase] = useState<Case | null>(null)
+  const [selected, setSelected] = useState<Case | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
-  const [error, setError] = useState('')
   const [newCase, setNewCase] = useState({ title: '', description: '', severity: 'medium' })
 
-  const { data: cases, isLoading } = useQuery({
+  const { data: cases = [], isLoading } = useQuery({
     queryKey: ['cases', activeDataset?.file_id, statusFilter],
-    queryFn: () => casesApi.list({
-      dataset_id: activeDataset?.file_id,
-      status_filter: statusFilter || undefined,
-    }),
-    refetchInterval: 30_000,
+    queryFn: () => casesApi.list({ dataset_id: activeDataset?.file_id, status_filter: statusFilter || undefined }),
+    refetchInterval: 30000,
   })
 
   const createMutation = useMutation({
-    mutationFn: () => casesApi.create({
-      ...newCase,
-      dataset_id: activeDataset!.file_id,
-      severity: newCase.severity as Case['severity'],
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['cases'] })
-      setShowCreate(false)
-      setNewCase({ title: '', description: '', severity: 'medium' })
-    },
-    onError: (e: unknown) => setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed'),
+    mutationFn: () => casesApi.create({ ...newCase, dataset_id: activeDataset!.file_id, severity: newCase.severity as any }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['cases'] }); setShowCreate(false); setNewCase({ title: '', description: '', severity: 'medium' }); toast.success('Case created') },
+    onError: () => toast.error('Failed to create case'),
   })
 
   const stats = {
-    open: cases?.filter(c => c.status === 'open').length ?? 0,
-    investigating: cases?.filter(c => c.status === 'investigating').length ?? 0,
-    resolved: cases?.filter(c => c.status === 'resolved').length ?? 0,
-    critical: cases?.filter(c => c.severity === 'critical').length ?? 0,
+    open: cases.filter(c => c.status === 'open').length,
+    investigating: cases.filter(c => c.status === 'investigating').length,
+    resolved: cases.filter(c => c.status === 'resolved').length,
+    critical: cases.filter(c => c.severity === 'critical').length,
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div className="space-y-6 max-w-6xl">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Case Management</h1>
-          <p className="text-gray-500 text-sm mt-1">Track bias findings from detection → remediation → resolution</p>
+          <h1 className="text-2xl font-bold text-gray-900">Case Management</h1>
+          <p className="text-gray-500 mt-1 text-sm">Track fair lending violations from detection → investigation → resolution</p>
         </div>
-        <button onClick={() => setShowCreate(true)} disabled={!activeDataset} className="btn-primary">
+        <button onClick={() => setShowCreate(true)} disabled={!activeDataset}
+          className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" /> New Case
         </button>
       </div>
 
-      {!activeDataset && <Alert type="warning">Select a dataset to view its cases.</Alert>}
-      {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
+      {!activeDataset && (
+        <div className="card p-6 text-center text-gray-400">
+          <ShieldAlert className="w-8 h-8 mx-auto mb-2 opacity-40" />
+          <p>Select a dataset from the top bar to view its cases.</p>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Open', val: stats.open, cls: 'text-danger' },
-          { label: 'Investigating', val: stats.investigating, cls: 'text-warning' },
-          { label: 'Resolved', val: stats.resolved, cls: 'text-success' },
-          { label: 'Critical', val: stats.critical, cls: 'text-orange-400' },
+          { label: 'Open', val: stats.open, color: 'text-red-600' },
+          { label: 'Investigating', val: stats.investigating, color: 'text-amber-600' },
+          { label: 'Resolved', val: stats.resolved, color: 'text-green-600' },
+          { label: 'Critical', val: stats.critical, color: 'text-red-700' },
         ].map(s => (
-          <div key={s.label} className="stat-card">
-            <span className="text-gray-500 text-xs uppercase tracking-wide">{s.label}</span>
-            <span className={`text-2xl font-bold ${s.cls}`}>{s.val}</span>
+          <div key={s.label} className="card p-4 text-center">
+            <div className={`text-3xl font-bold ${s.color}`}>{s.val}</div>
+            <div className="text-xs text-gray-500 mt-1">{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Filter */}
+      {/* Status filters */}
       <div className="flex gap-2 flex-wrap">
-        {['', 'open', 'investigating', 'resolved', 'closed'].map(s => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={clsx('px-3 py-1.5 rounded text-sm transition-colors', statusFilter === s
-              ? 'bg-accent text-white' : 'bg-surface-2 border border-white/5 text-gray-400 hover:text-gray-200')}
-          >
-            {s || 'All'}
+        {['', 'open', 'investigating', 'remediation', 'resolved', 'closed'].map(s => (
+          <button key={s} onClick={() => setStatusFilter(s)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              statusFilter === s ? 'bg-navy-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}>
+            {s || 'All'} {s && cases.filter(c => c.status === s).length > 0 && `(${cases.filter(c => c.status === s).length})`}
           </button>
         ))}
       </div>
 
       {/* Cases grid */}
       {isLoading ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
-      ) : cases && cases.length > 0 ? (
+        <div className="card p-8 text-center text-gray-400">Loading cases…</div>
+      ) : cases.length > 0 ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {cases.map(c => (
-            <CaseCard key={c.id} c={c} onClick={() => setSelectedCase(c)} />
+            <div key={c.id} onClick={() => setSelected(c)}
+              className="card p-4 cursor-pointer hover:border-navy-900 hover:shadow-md transition-all space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-900 leading-snug flex-1">{c.title}</p>
+                <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${SEV_COLOR[c.severity]}`}>
+                  {c.severity}
+                </span>
+              </div>
+              {c.description && <p className="text-xs text-gray-500 line-clamp-2">{c.description}</p>}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[c.status]}`}>
+                  {STATUS_ICON[c.status]} {c.status}
+                </span>
+                {c.fairness_score != null && (
+                  <span className="text-xs text-gray-400">Score: {c.fairness_score.toFixed(1)}</span>
+                )}
+                <span className="text-xs text-gray-400 ml-auto">{new Date(c.created_at).toLocaleDateString()}</span>
+              </div>
+              {c.assigned_to && (
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <User className="w-3 h-3" /> {c.assigned_to.slice(0, 8)}…
+                </div>
+              )}
+            </div>
           ))}
         </div>
       ) : (
-        <EmptyState
-          icon={<ShieldAlert className="w-10 h-10" />}
-          title="No cases found"
-          description="Cases are created automatically when fairness audits detect violations, or manually here"
-          action={activeDataset
-            ? <button onClick={() => setShowCreate(true)} className="btn-primary mt-2"><Plus className="w-4 h-4" /> Create Case</button>
-            : undefined}
-        />
+        <div className="card p-12 text-center text-gray-400">
+          <ShieldAlert className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p className="font-medium mb-1">No cases found</p>
+          <p className="text-sm">Cases are auto-created when Fairness Audit detects violations, or create one manually.</p>
+          {activeDataset && (
+            <button onClick={() => setShowCreate(true)} className="btn-primary mt-4 text-sm">
+              <Plus className="w-4 h-4" /> Create Case
+            </button>
+          )}
+        </div>
       )}
 
-      {/* Create case modal */}
+      {/* Create modal */}
       {showCreate && (
-        <Modal open onClose={() => setShowCreate(false)} title="New Case">
-          <div className="space-y-4">
-            <div>
-              <label className="label">Title *</label>
-              <input className="input" value={newCase.title} onChange={e => setNewCase(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Disparate impact detected for race attribute" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">New Case</h2>
+              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
             </div>
             <div>
-              <label className="label">Description</label>
-              <textarea className="input resize-none" rows={3} value={newCase.description} onChange={e => setNewCase(p => ({ ...p, description: e.target.value }))} placeholder="Describe the issue…" />
+              <label className="block text-xs font-medium text-gray-600 mb-1">Title *</label>
+              <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-navy-900"
+                value={newCase.title} onChange={e => setNewCase(p => ({...p, title: e.target.value}))}
+                placeholder="e.g. Race disparate impact detected — needs investigation" />
             </div>
             <div>
-              <label className="label">Severity</label>
-              <select className="input" value={newCase.severity} onChange={e => setNewCase(p => ({ ...p, severity: e.target.value }))}>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+              <textarea rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
+                value={newCase.description} onChange={e => setNewCase(p => ({...p, description: e.target.value}))}
+                placeholder="Describe the issue found…" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Severity</label>
+              <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                value={newCase.severity} onChange={e => setNewCase(p => ({...p, severity: e.target.value}))}>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
                 <option value="critical">Critical</option>
               </select>
             </div>
-            <button onClick={() => createMutation.mutate()} disabled={!newCase.title || createMutation.isPending} className="btn-primary w-full justify-center">
-              {createMutation.isPending ? <Spinner size="sm" /> : <Plus className="w-4 h-4" />} Create Case
+            <button onClick={() => createMutation.mutate()} disabled={!newCase.title || !activeDataset || createMutation.isPending}
+              className="btn-primary w-full flex items-center justify-center gap-2">
+              {createMutation.isPending ? 'Creating…' : <><Plus className="w-4 h-4"/> Create Case</>}
             </button>
           </div>
-        </Modal>
+        </div>
       )}
 
-      {/* Case detail modal */}
-      {selectedCase && <CaseDetailModal c={selectedCase} onClose={() => setSelectedCase(null)} />}
+      {/* Case detail */}
+      {selected && (
+        <CaseDetail c={selected} onClose={() => setSelected(null)}
+          onUpdated={() => { qc.invalidateQueries({ queryKey: ['cases'] }); setSelected(null) }} />
+      )}
     </div>
   )
 }

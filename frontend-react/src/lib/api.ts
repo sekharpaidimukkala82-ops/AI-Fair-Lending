@@ -39,7 +39,7 @@ export interface Case {
   title: string
   description?: string
   severity: 'low' | 'medium' | 'high' | 'critical'
-  status: 'open' | 'investigating' | 'resolved' | 'closed'
+  status: 'open' | 'investigating' | 'remediation' | 'resolved' | 'closed'
   assigned_to?: string
   created_by?: string
   fairness_score?: number
