@@ -1,13 +1,9 @@
 """
 Reports routes – generate downloadable PDF and JSON compliance reports.
+All routes NEVER return 404 — they always produce a report using whatever data is available.
 """
-
 from __future__ import annotations
-
-from io import StringIO
-from pathlib import Path
 from typing import Any, Dict, List, Optional
-
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import Response
@@ -19,86 +15,71 @@ from backend.core.fairness_engine import FairnessEngine
 from backend.core.report_generator import ReportGenerator
 from backend.database.connection import get_db
 from backend.database.models import User
-from backend.models.schemas import FairnessReport, MLPrediction
+from backend.models.schemas import FairnessReport as FReport, BiasIndicator
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
+# ── Singletons ──────────────────────────────────────────────────────────────
+
 def _get_report_gen():
-    if not hasattr(_get_report_gen, "_instance"):
-        try:
-            _get_report_gen._instance = ReportGenerator()
-        except Exception:
-            _get_report_gen._instance = None
-    return _get_report_gen._instance
+    if not hasattr(_get_report_gen, "_i"):
+        try: _get_report_gen._i = ReportGenerator()
+        except: _get_report_gen._i = None
+    return _get_report_gen._i
 
-def _get_fairness_engine():
-    if not hasattr(_get_fairness_engine, "_instance"):
-        try:
-            _get_fairness_engine._instance = FairnessEngine()
-        except Exception:
-            _get_fairness_engine._instance = None
-    return _get_fairness_engine._instance
+def _get_engine():
+    if not hasattr(_get_engine, "_i"):
+        try: _get_engine._i = FairnessEngine()
+        except: _get_engine._i = None
+    return _get_engine._i
 
-# Stateless — no shared in-memory dicts needed
 from backend.api.routes.ml import _get_ml_engine, _predictions_cache
 
+# ── Helpers ─────────────────────────────────────────────────────────────────
 
-# ---------------------------------------------------------------------------
-# Request models
-# ---------------------------------------------------------------------------
+def _load_df(dataset_id: str) -> Optional[pd.DataFrame]:
+    """Load dataset from disk. Returns None (never raises) if not found."""
+    try:
+        from backend.api.routes.fairness import _load_dataset
+        from fastapi import HTTPException as _H
+        try:
+            return _load_dataset(dataset_id)
+        except _H:
+            return None
+    except Exception:
+        return None
+
+def _ct(fmt): return "application/pdf" if fmt == "pdf" else "application/json"
+def _fn(base, fmt): return f"{base}.{fmt}"
+
+async def _save_report(db, dataset_id, report_type, fmt, size, user):
+    try:
+        from backend.database.crud import create_report, get_dataset_by_file_id
+        ds = await get_dataset_by_file_id(db, dataset_id)
+        if ds:
+            await create_report(db, {"dataset_id": ds.id, "report_type": report_type,
+                                     "format": fmt, "file_size": size,
+                                     "generated_by_id": user.id if user else None})
+    except Exception:
+        pass
+
+# ── Request models ───────────────────────────────────────────────────────────
 
 class FairnessReportRequest(BaseModel):
     dataset_id: str
     field_map: Optional[Dict[str, str]] = None
 
-
 class ComplianceReportRequest(BaseModel):
     dataset_id: str
 
-
 class RiskReportRequest(BaseModel):
     dataset_id: str
-
 
 class ExecutiveSummaryRequest(BaseModel):
     dataset_id: Optional[str] = None
     custom_data: Optional[Dict[str, Any]] = None
 
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _get_df(dataset_id: str) -> pd.DataFrame:
-    """Stateless disk loader — same as fairness route."""
-    from backend.api.routes.fairness import _load_dataset
-    return _load_dataset(dataset_id)
-
-
-def _get_df_safe(dataset_id: str):
-    """Stateless disk loader that returns None instead of raising any error."""
-    try:
-        from backend.api.routes.fairness import _load_dataset
-        from fastapi import HTTPException as _HTTPException
-        try:
-            return _load_dataset(dataset_id)
-        except _HTTPException:
-            return None
-    except Exception:
-        return None
-
-
-def _content_type(fmt: str) -> str:
-    return "application/pdf" if fmt == "pdf" else "application/json"
-
-
-def _filename(base: str, fmt: str) -> str:
-    return f"{base}.{fmt}"
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
+# ── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/fairness")
 async def generate_fairness_report(
@@ -107,18 +88,15 @@ async def generate_fairness_report(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Generate a fairness audit report. Never fails — uses DB fallback if file missing."""
-    df = _get_df_safe(request.dataset_id)
+    """Generate fairness PDF/JSON. Always works — uses DB cache if file missing."""
+    df = _load_df(request.dataset_id)
 
     if df is not None:
-        # Fresh analysis from file
-        field_map = request.field_map
-        fairness_report = _get_fairness_engine().generate_audit(df, field_map, dataset_id=request.dataset_id)
+        fairness_report = _get_engine().generate_audit(df, request.field_map, dataset_id=request.dataset_id)
     else:
-        # Fallback: use last saved audit from DB
+        # Try DB cached audit
         try:
             from backend.database.crud import get_dataset_by_file_id, list_fairness_audits
-            from backend.models.schemas import FairnessReport as FReport, BiasIndicator
             ds = await get_dataset_by_file_id(db, request.dataset_id)
             if ds:
                 audits = await list_fairness_audits(db, ds.id)
@@ -130,32 +108,33 @@ async def generate_fairness_report(
                         disparate_impact_ratios=a.disparate_impact_ratios or {},
                         approval_rates_by_group=a.approval_rates_by_group or {},
                         bias_indicators=[BiasIndicator(**b) for b in (a.bias_indicators or [])],
-                        findings=a.findings or ["Report generated from cached audit data."],
-                        recommendations=a.recommendations or ["Re-upload dataset for fresh analysis."],
+                        findings=a.findings or ["Report from cached data — re-upload for fresh analysis."],
+                        recommendations=a.recommendations or ["Re-upload dataset for updated results."],
                     )
                 else:
-                    raise HTTPException(status_code=404,
-                        detail="No fairness audit found for this dataset. Run a Fairness Audit first, then generate the report.")
+                    # No file, no DB audit — generate empty report
+                    fairness_report = FReport(
+                        dataset_id=request.dataset_id, score=0,
+                        findings=["Dataset file not available. Please re-upload and run Fairness Audit."],
+                        recommendations=["Upload the dataset, then click 'Run Fairness Audit' before generating reports."],
+                    )
             else:
-                raise HTTPException(status_code=404,
-                    detail="Dataset not found. Please re-upload the file.")
-        except HTTPException:
-            raise
+                fairness_report = FReport(
+                    dataset_id=request.dataset_id, score=0,
+                    findings=["Dataset not found. Please re-upload."],
+                    recommendations=["Upload the dataset to generate a full report."],
+                )
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Could not generate report: {e}")
+            fairness_report = FReport(
+                dataset_id=request.dataset_id, score=0,
+                findings=[f"Could not load data: {e}"],
+                recommendations=["Re-upload the dataset and try again."],
+            )
 
     content = _get_report_gen().generate_fairness_report(fairness_report, fmt=format)
-    fname = _filename(f"fairness_report_{request.dataset_id[:8]}", format)
-    try:
-        from backend.database.crud import create_report, get_dataset_by_file_id
-        ds = await get_dataset_by_file_id(db, request.dataset_id)
-        if ds:
-            await create_report(db, {"dataset_id": ds.id, "report_type": "fairness", "format": format,
-                                     "generated_by_id": current_user.id if current_user else None,
-                                     "file_size": len(content)})
-    except Exception:
-        pass
-    return Response(content=content, media_type=_content_type(format),
+    fname = _fn(f"fairness_report_{request.dataset_id[:8]}", format)
+    await _save_report(db, request.dataset_id, "fairness", format, len(content), current_user)
+    return Response(content=content, media_type=_ct(format),
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
@@ -166,31 +145,25 @@ async def generate_compliance_report(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Generate HMDA compliance report. Uses DB metadata if file missing."""
-    df = _get_df_safe(request.dataset_id)
+    """Generate compliance report. Uses DB metadata if file missing."""
+    df = _load_df(request.dataset_id)
     if df is None:
         try:
             from backend.database.crud import get_dataset_by_file_id
             ds = await get_dataset_by_file_id(db, request.dataset_id)
-            if not ds:
-                raise HTTPException(status_code=404, detail="Dataset not found. Please re-upload.")
-            df = pd.DataFrame({"dataset": [ds.filename], "rows": [ds.total_rows or 0], "columns": [ds.total_columns or 0]})
-        except HTTPException:
-            raise
+            if ds:
+                df = pd.DataFrame({"dataset": [ds.filename], "total_rows": [ds.total_rows or 0],
+                                   "total_columns": [ds.total_columns or 0],
+                                   "quality_score": [ds.quality_score or 0]})
+            else:
+                df = pd.DataFrame({"note": ["Dataset not found — re-upload to generate full report."]})
         except Exception:
-            raise HTTPException(status_code=404, detail="Dataset not found. Please re-upload.")
+            df = pd.DataFrame({"note": ["Could not load dataset data."]})
+
     content = _get_report_gen().generate_compliance_report(df, None, fmt=format)
-    fname = _filename(f"compliance_report_{request.dataset_id}", format)
-    try:
-        from backend.database.crud import create_report, get_dataset_by_file_id
-        ds = await get_dataset_by_file_id(db, request.dataset_id)
-        if ds:
-            await create_report(db, {"dataset_id": ds.id, "report_type": "compliance", "format": format,
-                                     "generated_by_id": current_user.id if current_user else None,
-                                     "file_size": len(content)})
-    except Exception:
-        pass
-    return Response(content=content, media_type=_content_type(format),
+    fname = _fn(f"compliance_report_{request.dataset_id[:8]}", format)
+    await _save_report(db, request.dataset_id, "compliance", format, len(content), current_user)
+    return Response(content=content, media_type=_ct(format),
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
 
 
@@ -201,178 +174,33 @@ async def generate_risk_report(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """Generate a risk assessment report. Works with or without prior ML training."""
-    df = _get_df_safe(request.dataset_id)
+    """Generate risk report."""
+    df = _load_df(request.dataset_id)
+
     if df is None:
-        # Risk report from DB metadata only
         content = _get_report_gen().generate_risk_report_from_df(
-            pd.DataFrame({"note": ["Dataset file not available. Re-upload for full risk analysis."]}), None, fmt=format)
-        fname = _filename(f"risk_report_{request.dataset_id[:8]}", format)
-        return Response(content=content, media_type=_content_type(format),
-                        headers={"Content-Disposition": f"attachment; filename={fname}"})
-
-    # Try to use cached predictions first
-    predictions = _predictions_cache.get(request.dataset_id, [])
-
-    # If no cached predictions, try to train on-the-fly
-    if not predictions:
-        try:
-            ml = _get_ml_engine()
-            if ml:
-                result = ml.train(df, None)
-                predictions = ml.predict_batch(df, None)
-                _predictions_cache[request.dataset_id] = predictions
-        except Exception:
-            predictions = []
-
-    # If still no predictions, generate a dataset-stats-based risk report
-    if not predictions:
-        content = _get_report_gen().generate_risk_report_from_df(df, None, fmt=format)
+            pd.DataFrame({"note": ["Dataset file unavailable — re-upload for full risk analysis."]}),
+            None, fmt=format)
     else:
-        content = _get_report_gen().generate_risk_report(predictions, fmt=format)
-
-    fname = _filename(f"risk_report_{request.dataset_id}", format)
-    try:
-        from backend.database.crud import create_report, get_dataset_by_file_id
-        ds = await get_dataset_by_file_id(db, request.dataset_id)
-        if ds:
-            await create_report(db, {"dataset_id": ds.id, "report_type": "risk", "format": format,
-                                     "generated_by_id": current_user.id if current_user else None,
-                                     "file_size": len(content)})
-    except Exception:
-        pass
-    return Response(content=content, media_type=_content_type(format),
-                    headers={"Content-Disposition": f"attachment; filename={fname}"})
-
-
-@router.post("/executive-summary")
-async def generate_executive_summary(
-    request: ExecutiveSummaryRequest,
-    format: str = Query(default="pdf", pattern="^(pdf|json)$"),
-    db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
-):
-    """Generate a high-level executive summary. Always succeeds — never fails with 404."""
-    summary_data: Dict[str, Any] = request.custom_data or {}
-
-    if request.dataset_id:
-        # Try to load file — but don't fail if missing
-        df = _get_df_safe(request.dataset_id)
-
-        if df is not None:
-            summary_data["dataset_id"] = request.dataset_id
-            summary_data["total_records"] = len(df)
-            summary_data["total_fields"] = len(df.columns)
+        predictions = _predictions_cache.get(request.dataset_id, [])
+        if not predictions:
             try:
-                fairness_report = _get_fairness_engine().generate_audit(df, None, dataset_id=request.dataset_id)
-                summary_data["fairness_score"] = fairness_report.score
-                summary_data["findings"] = fairness_report.findings
-                summary_data["recommendations"] = fairness_report.recommendations
-                summary_data["disparate_impact_ratios"] = fairness_report.disparate_impact_ratios
-                summary_data["approval_rates_by_group"] = fairness_report.approval_rates_by_group
-                summary_data["bias_indicators"] = [b.model_dump() for b in fairness_report.bias_indicators]
-            except Exception as e:
-                summary_data["fairness_note"] = f"Fairness analysis unavailable: {e}"
-                summary_data["findings"] = []
-                summary_data["recommendations"] = ["Run Fairness Audit first for detailed findings."]
-            try:
-                predictions = _predictions_cache.get(request.dataset_id, [])
-                if predictions:
-                    from collections import Counter
-                    summary_data["risk_distribution"] = dict(Counter(p.risk_category for p in predictions))
-                    summary_data["total_predictions"] = len(predictions)
-                    approved = sum(1 for p in predictions if p.approval_probability >= 0.5)
-                    summary_data["model_approval_rate"] = round(approved / len(predictions) * 100, 1)
+                ml = _get_ml_engine()
+                if ml:
+                    ml.train(df, None)
+                    predictions = ml.predict_batch(df, None)
+                    _predictions_cache[request.dataset_id] = predictions
             except Exception:
-                pass
+                predictions = []
+        if predictions:
+            content = _get_report_gen().generate_risk_report(predictions, fmt=format)
         else:
-            # File not on disk — use DB metadata for a partial report
-            try:
-                from backend.database.crud import get_dataset_by_file_id, list_fairness_audits
-                ds = await get_dataset_by_file_id(db, request.dataset_id)
-                if ds:
-                    summary_data["dataset_id"] = request.dataset_id
-                    summary_data["dataset_name"] = ds.filename
-                    summary_data["total_records"] = ds.total_rows or 0
-                    summary_data["total_fields"] = ds.total_columns or 0
-                    summary_data["quality_score"] = ds.quality_score or 0
-                    # Use last fairness audit from DB
-                    audits = await list_fairness_audits(db, ds.id)
-                    if audits:
-                        latest = audits[0]
-                        summary_data["fairness_score"] = latest.fairness_score or 0
-                        summary_data["disparate_impact_ratios"] = latest.disparate_impact_ratios or {}
-                        summary_data["approval_rates_by_group"] = latest.approval_rates_by_group or {}
-                        summary_data["findings"] = latest.findings or []
-                        summary_data["recommendations"] = latest.recommendations or []
-                        summary_data["bias_indicators"] = latest.bias_indicators or []
-                    else:
-                        summary_data["findings"] = ["No fairness audit found. Run a Fairness Audit first."]
-                        summary_data["recommendations"] = ["Upload the dataset and run Fairness Audit for full analysis."]
-            except Exception as e:
-                summary_data["findings"] = [f"Could not load dataset metadata: {e}"]
-                summary_data["recommendations"] = ["Re-upload the dataset to generate a full report."]
+            content = _get_report_gen().generate_risk_report_from_df(df, None, fmt=format)
 
-    if not summary_data:
-        summary_data = {
-            "platform": "Fair Lending Intelligence Platform",
-            "message": "No dataset selected.",
-            "findings": [],
-            "recommendations": ["Upload a lending dataset to generate a full executive summary."],
-        }
-
-    content = _get_report_gen().generate_executive_summary(summary_data, fmt=format)
-    fname = _filename("executive_summary", format)
-    try:
-        from backend.database.crud import create_report, get_dataset_by_file_id
-        if request.dataset_id:
-            ds = await get_dataset_by_file_id(db, request.dataset_id)
-            if ds:
-                await create_report(db, {
-                    "dataset_id": ds.id, "report_type": "executive", "format": format,
-                    "generated_by_id": current_user.id if current_user else None,
-                    "file_size": len(content),
-                })
-    except Exception:
-        pass
-    return Response(content=content, media_type=_content_type(format),
+    fname = _fn(f"risk_report_{request.dataset_id[:8]}", format)
+    await _save_report(db, request.dataset_id, "risk", format, len(content), current_user)
+    return Response(content=content, media_type=_ct(format),
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
-
-
-@router.get("/list")
-async def list_reports(
-    dataset_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
-):
-    """List generated reports for a dataset."""
-    try:
-        from backend.database.crud import list_reports as db_list_reports, get_dataset_by_file_id
-        from backend.database.models import Report
-        from sqlalchemy import select
-
-        q = select(Report).order_by(Report.created_at.desc())
-        if dataset_id:
-            ds = await get_dataset_by_file_id(db, dataset_id)
-            if ds:
-                q = q.where(Report.dataset_id == ds.id)
-        result = await db.execute(q.limit(20))
-        reports = result.scalars().all()
-        return {
-            "reports": [
-                {
-                    "id": r.id,
-                    "report_type": r.report_type,
-                    "format": r.format,
-                    "file_size": r.file_size,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "dataset_filename": dataset_id or "",
-                }
-                for r in reports
-            ]
-        }
-    except Exception as e:
-        return {"reports": []}
 
 
 @router.post("/executive-summary")
@@ -383,76 +211,87 @@ async def generate_executive_summary(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Generate executive summary. ALWAYS succeeds — never returns 404."""
-    summary: Dict[str, Any] = {}
+    summary: Dict[str, Any] = request.custom_data or {}
 
     if request.dataset_id:
-        # Step 1: try to get data from file
-        df = _get_df_safe(request.dataset_id)
-
+        df = _load_df(request.dataset_id)
         if df is not None:
             summary["total_records"] = len(df)
             summary["total_fields"] = len(df.columns)
             try:
-                fairness_report = _get_fairness_engine().generate_audit(df, None, dataset_id=request.dataset_id)
-                summary["fairness_score"] = fairness_report.score
-                summary["disparate_impact_ratios"] = fairness_report.disparate_impact_ratios
-                summary["approval_rates_by_group"] = fairness_report.approval_rates_by_group
-                summary["bias_indicators"] = [b.model_dump() for b in fairness_report.bias_indicators]
-                summary["findings"] = fairness_report.findings
-                summary["recommendations"] = fairness_report.recommendations
+                r = _get_engine().generate_audit(df, None, dataset_id=request.dataset_id)
+                summary.update({
+                    "fairness_score": r.score,
+                    "disparate_impact_ratios": r.disparate_impact_ratios,
+                    "approval_rates_by_group": r.approval_rates_by_group,
+                    "bias_indicators": [b.model_dump() for b in r.bias_indicators],
+                    "findings": r.findings,
+                    "recommendations": r.recommendations,
+                })
             except Exception as e:
                 summary["findings"] = [f"Fairness analysis failed: {e}"]
-                summary["recommendations"] = ["Try re-running the fairness audit."]
+                summary["recommendations"] = ["Re-run Fairness Audit and try again."]
         else:
-            # Step 2: file missing — use DB data
             try:
                 from backend.database.crud import get_dataset_by_file_id, list_fairness_audits
                 ds = await get_dataset_by_file_id(db, request.dataset_id)
                 if ds:
-                    summary["dataset_name"] = ds.filename
-                    summary["total_records"] = ds.total_rows or 0
-                    summary["total_fields"] = ds.total_columns or 0
-                    summary["quality_score"] = ds.quality_score or 0
+                    summary.update({"dataset_name": ds.filename, "total_records": ds.total_rows or 0,
+                                    "total_fields": ds.total_columns or 0, "quality_score": ds.quality_score or 0})
                     audits = await list_fairness_audits(db, ds.id)
                     if audits:
                         a = audits[0]
-                        summary["fairness_score"] = a.fairness_score or 0
-                        summary["disparate_impact_ratios"] = a.disparate_impact_ratios or {}
-                        summary["approval_rates_by_group"] = a.approval_rates_by_group or {}
-                        summary["bias_indicators"] = a.bias_indicators or []
-                        summary["findings"] = a.findings or []
-                        summary["recommendations"] = a.recommendations or []
+                        summary.update({
+                            "fairness_score": a.fairness_score or 0,
+                            "disparate_impact_ratios": a.disparate_impact_ratios or {},
+                            "approval_rates_by_group": a.approval_rates_by_group or {},
+                            "bias_indicators": a.bias_indicators or [],
+                            "findings": a.findings or [],
+                            "recommendations": a.recommendations or [],
+                        })
                     else:
-                        summary["findings"] = ["No previous fairness audit found for this dataset."]
-                        summary["recommendations"] = ["Run a Fairness Audit first to get detailed findings."]
+                        summary["findings"] = ["No fairness audit found. Run Fairness Audit first."]
+                        summary["recommendations"] = ["Go to Fairness Dashboard and run an audit, then generate this report."]
                 else:
-                    summary["findings"] = ["Dataset record not found in database."]
-                    summary["recommendations"] = ["Re-upload the dataset and run a Fairness Audit."]
+                    summary["findings"] = ["Dataset not found."]
+                    summary["recommendations"] = ["Re-upload the dataset."]
             except Exception as e:
-                summary["findings"] = [f"Could not load dataset data: {e}"]
-                summary["recommendations"] = ["Re-upload the dataset to generate a full report."]
+                summary["findings"] = [f"Error: {e}"]
+                summary["recommendations"] = ["Re-upload dataset and try again."]
 
     if not summary:
-        summary = {
-            "findings": ["No dataset selected."],
-            "recommendations": ["Select a dataset from the top bar and run a Fairness Audit."],
-        }
+        summary = {"findings": ["No dataset selected."],
+                   "recommendations": ["Select a dataset and run Fairness Audit first."]}
 
     content = _get_report_gen().generate_executive_summary(summary, fmt=format)
-    fname = _filename("executive_summary", format)
-
-    try:
-        from backend.database.crud import create_report, get_dataset_by_file_id
-        if request.dataset_id:
-            ds = await get_dataset_by_file_id(db, request.dataset_id)
-            if ds:
-                await create_report(db, {
-                    "dataset_id": ds.id, "report_type": "executive", "format": format,
-                    "generated_by_id": current_user.id if current_user else None,
-                    "file_size": len(content),
-                })
-    except Exception:
-        pass
-
-    return Response(content=content, media_type=_content_type(format),
+    fname = _fn("executive_summary", format)
+    await _save_report(db, request.dataset_id or "", "executive", format, len(content), current_user)
+    return Response(content=content, media_type=_ct(format),
                     headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
+@router.get("/list")
+async def list_reports(
+    dataset_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """List generated reports."""
+    try:
+        from backend.database.models import Report
+        from sqlalchemy import select
+        q = select(Report).order_by(Report.created_at.desc())
+        if dataset_id:
+            from backend.database.crud import get_dataset_by_file_id
+            ds = await get_dataset_by_file_id(db, dataset_id)
+            if ds:
+                q = q.where(Report.dataset_id == ds.id)
+        result = await db.execute(q.limit(20))
+        reports = result.scalars().all()
+        return {"reports": [{"id": r.id, "report_type": r.report_type, "format": r.format,
+                              "file_size": r.file_size,
+                              "created_at": r.created_at.isoformat() if r.created_at else None,
+                              "dataset_filename": dataset_id or ""}
+                             for r in reports]}
+    except Exception:
+        return {"reports": []}
