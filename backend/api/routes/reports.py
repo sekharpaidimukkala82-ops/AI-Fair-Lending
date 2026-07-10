@@ -215,9 +215,28 @@ async def generate_executive_summary(
 
     if request.dataset_id:
         df = _load_df(request.dataset_id)
+
+        # Always get filename from DB
+        dataset_name = request.dataset_id[:8]
+        try:
+            from backend.database.crud import get_dataset_by_file_id as _get_ds
+            _ds = await _get_ds(db, request.dataset_id)
+            if _ds:
+                dataset_name = _ds.filename
+        except Exception:
+            pass
+        summary["dataset_name"] = dataset_name
         if df is not None:
             summary["total_records"] = len(df)
             summary["total_fields"] = len(df.columns)
+            # Get actual filename from DB
+            try:
+                from backend.database.crud import get_dataset_by_file_id
+                ds = await get_dataset_by_file_id(db, request.dataset_id)
+                if ds:
+                    summary["dataset_name"] = ds.filename
+            except Exception:
+                pass
             try:
                 r = _get_engine().generate_audit(df, None, dataset_id=request.dataset_id)
                 summary.update({
