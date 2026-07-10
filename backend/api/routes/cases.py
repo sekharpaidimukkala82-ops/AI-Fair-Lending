@@ -246,14 +246,14 @@ async def auto_create_case_from_audit(
     created_by: Optional[str] = None,
 ) -> Optional[Case]:
     """Automatically create a case when a fairness audit finds violations."""
-    if fairness_score >= 0.75:
-        return None   # No case needed
+    if fairness_score >= 80:
+        return None   # No case needed — score is acceptable
 
-    severity = "critical" if fairness_score < 0.60 else "high" if fairness_score < 0.70 else "medium"
-    title = f"Fairness Violation Detected — Score {fairness_score:.1%}"
+    severity = "critical" if fairness_score < 60 else "high" if fairness_score < 70 else "medium"
+    title = f"Fairness Violation Detected — Score {fairness_score:.1f}/100"
     description = (
         f"Automated case created by fairness audit {audit_id[:8]}. "
-        f"Score {fairness_score:.1%} is below compliance threshold. "
+        f"Score {fairness_score:.1f}/100 is below the 80-point compliance threshold. "
         f"Bias indicators: {', '.join(bias_indicators[:3]) if bias_indicators else 'None specified'}."
     )
 
