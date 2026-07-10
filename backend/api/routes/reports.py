@@ -298,19 +298,21 @@ async def list_reports(
     """List generated reports."""
     try:
         from backend.database.models import Report
+        from backend.database.crud import get_dataset_by_file_id
         from sqlalchemy import select
         q = select(Report).order_by(Report.created_at.desc())
+        ds_filename = dataset_id or ""
         if dataset_id:
-            from backend.database.crud import get_dataset_by_file_id
             ds = await get_dataset_by_file_id(db, dataset_id)
             if ds:
                 q = q.where(Report.dataset_id == ds.id)
+                ds_filename = ds.filename
         result = await db.execute(q.limit(20))
         reports = result.scalars().all()
         return {"reports": [{"id": r.id, "report_type": r.report_type, "format": r.format,
                               "file_size": r.file_size,
                               "created_at": r.created_at.isoformat() if r.created_at else None,
-                              "dataset_filename": dataset_id or ""}
+                              "dataset_filename": ds_filename}
                              for r in reports]}
     except Exception:
         return {"reports": []}
