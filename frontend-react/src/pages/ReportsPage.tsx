@@ -67,7 +67,9 @@ export default function ReportsPage() {
       } catch { return [] }
     },
     enabled: !!selectedId,
-    refetchInterval: false,
+    staleTime: 30000,     // don't refetch for 30s
+    refetchOnWindowFocus: false,
+    retry: false,
   })
 
   const generateMutation = useMutation({
