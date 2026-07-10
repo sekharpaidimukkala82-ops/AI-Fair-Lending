@@ -198,7 +198,7 @@ async def run_fairness_audit(
         from backend.database.crud import create_fairness_audit, get_dataset_by_file_id
         ds = await get_dataset_by_file_id(db, request.dataset_id)
         if ds:
-            await create_fairness_audit(db, ds.id, {
+            audit_record = await create_fairness_audit(db, ds.id, {
                 "analyst_id": current_user.id if current_user else None,
                 "fairness_score": report.score,
                 "disparate_impact_ratios": report.disparate_impact_ratios,
@@ -209,6 +209,25 @@ async def run_fairness_audit(
                 "outcome_column": request.outcome_column,
                 "protected_columns": request.protected_columns,
             })
+            # Auto-create compliance case if violations detected
+            if report.score < 80 and report.bias_indicators:
+                try:
+                    from backend.api.routes.cases import auto_create_case_from_audit
+                    bias_descriptions = [
+                        f"{b.field.capitalize()} group '{b.group}': DI ratio {b.value:.2%} ({b.severity})"
+                        for b in report.bias_indicators[:5]
+                    ]
+                    await auto_create_case_from_audit(
+                        audit_id=audit_record.id,
+                        dataset_file_id=request.dataset_id,
+                        fairness_score=report.score,
+                        bias_indicators=bias_descriptions,
+                        db=db,
+                        created_by=current_user.id if current_user else None,
+                    )
+                    logger.info(f"Auto-created compliance case for dataset {request.dataset_id} (score {report.score})")
+                except Exception as ce:
+                    logger.warning(f"Auto case creation failed (non-fatal): {ce}")
     except Exception as e:
         logger.warning(f"DB audit persist failed: {e}")
 
