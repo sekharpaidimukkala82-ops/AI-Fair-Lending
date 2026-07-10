@@ -764,40 +764,137 @@ class ReportGenerator:
             return json.dumps(all_data, default=str, indent=2).encode()
 
         buffer = io.BytesIO()
-        doc = _build_doc(buffer, "Executive Summary")
+        doc = _build_doc(buffer, "Fair Lending Executive Summary")
         story = []
 
         story.append(Spacer(1, 0.2 * inch))
         story.append(self._p("FAIR LENDING EXECUTIVE SUMMARY", "ReportTitle"))
         story.append(self._p(
-            f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Generated: {datetime.utcnow().strftime('%B %d, %Y %H:%M UTC')}   |   "
+            f"Dataset: {all_data.get('dataset_name', all_data.get('dataset_id', 'N/A'))}",
             "BodyText2",
         ))
-        story.append(Spacer(1, 0.15 * inch))
+        story.append(HRFlowable(width="100%", thickness=2, color=NAVY, spaceAfter=12))
 
-        # Key metrics table
-        story.extend(self._section("Key Performance Indicators"))
-        kpi_rows = [["Indicator", "Value"]]
-        for key, val in all_data.items():
-            if isinstance(val, (int, float, str)):
-                kpi_rows.append([str(key).replace("_", " ").title(), str(val)])
-        t = Table(kpi_rows, colWidths=[3.5 * inch, 3 * inch])
-        t.setStyle(_table_style())
-        story.append(t)
+        # ── Key Metrics ──
+        story.extend(self._section("Portfolio Overview"))
+        kpi_data = [["Metric", "Value", "Status"]]
+        if all_data.get("total_records"):
+            kpi_data.append(["Total Applications", f"{all_data['total_records']:,}", "—"])
+        if all_data.get("fairness_score") is not None:
+            score = float(all_data["fairness_score"])
+            status = "ACCEPTABLE" if score >= 80 else "NEEDS ATTENTION" if score >= 60 else "HIGH RISK"
+            kpi_data.append(["Fairness Score", f"{score:.1f}/100", status])
+        if all_data.get("quality_score"):
+            kpi_data.append(["Data Quality Score", f"{all_data['quality_score']:.1f}%", "—"])
+        if all_data.get("model_approval_rate"):
+            kpi_data.append(["Model Approval Rate", f"{all_data['model_approval_rate']}%", "—"])
 
-        # Findings / notes
+        if len(kpi_data) > 1:
+            t = Table(kpi_data, colWidths=[2.5 * inch, 2.0 * inch, 2.5 * inch])
+            style = _table_style()
+            for i, row in enumerate(kpi_data[1:], 1):
+                if "HIGH RISK" in str(row[2]):
+                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFEBEE"))
+                elif "NEEDS ATTENTION" in str(row[2]):
+                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFF9C4"))
+                elif "ACCEPTABLE" in str(row[2]):
+                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#E8F5E9"))
+            t.setStyle(style)
+            story.append(t)
+            story.append(Spacer(1, 0.1 * inch))
+
+        # ── Disparate Impact ──
+        di = all_data.get("disparate_impact_ratios", {})
+        if di:
+            story.extend(self._section("Disparate Impact Summary"))
+            di_data = [["Protected Class", "DI Ratio", "4/5ths Status"]]
+            for field, ratio in sorted(di.items(), key=lambda x: float(x[1])):
+                r = float(ratio)
+                di_data.append([field.capitalize(), f"{r:.3f}", "PASS ✓" if r >= 0.80 else "FAIL ✗"])
+            t = Table(di_data, colWidths=[2.0 * inch, 2.0 * inch, 2.5 * inch])
+            style = _table_style()
+            for i, row in enumerate(di_data[1:], 1):
+                if "FAIL" in row[2]:
+                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FFEBEE"))
+                    style.add("TEXTCOLOR", (2, i), (2, i), RED)
+                else:
+                    style.add("BACKGROUND", (0, i), (-1, i), colors.HexColor("#E8F5E9"))
+                    style.add("TEXTCOLOR", (2, i), (2, i), GREEN)
+            t.setStyle(style)
+            story.append(t)
+            # DI bar chart
+            try:
+                chart = self._bar_chart(
+                    {k: float(v) for k, v in di.items()},
+                    "Disparate Impact Ratios", width=6.5,
+                    height=max(1.5, len(di) * 0.4), threshold=0.80
+                )
+                story.append(Spacer(1, 0.06 * inch))
+                story.append(chart)
+            except Exception:
+                pass
+            story.append(Spacer(1, 0.1 * inch))
+
+        # ── Approval Rates ──
+        approval = all_data.get("approval_rates_by_group", {})
+        if approval:
+            story.extend(self._section("Approval Rates by Demographic Group"))
+            for field, rates in approval.items():
+                if not rates:
+                    continue
+                story.append(self._p(field.capitalize(), "SubHeading"))
+                try:
+                    chart = self._bar_chart(
+                        {str(k): float(v) for k, v in rates.items()},
+                        f"Approval Rate by {field.capitalize()}",
+                        width=6.5, height=max(1.5, len(rates) * 0.35), threshold=0.80
+                    )
+                    story.append(chart)
+                    story.append(Spacer(1, 0.06 * inch))
+                except Exception:
+                    pass
+
+        # ── Bias Indicators ──
+        bias = all_data.get("bias_indicators", [])
+        if bias:
+            story.extend(self._section(f"Bias Indicators ({len(bias)} flagged)"))
+            bi_data = [["Protected Class", "Group", "DI Ratio", "Severity"]]
+            for ind in (bias if isinstance(bias[0], dict) else [b.model_dump() for b in bias]):
+                bi_data.append([
+                    str(ind.get("field", "")).capitalize(),
+                    str(ind.get("group", "")),
+                    f"{float(ind.get('value', 0)):.3f}",
+                    str(ind.get("severity", "")).upper(),
+                ])
+            t = Table(bi_data, colWidths=[1.5 * inch, 1.8 * inch, 1.2 * inch, 1.2 * inch])
+            sev_colors = {"CRITICAL": colors.HexColor("#FFCDD2"), "HIGH": colors.HexColor("#FFE0B2"), "MEDIUM": colors.HexColor("#FFF9C4")}
+            style = _table_style()
+            for i, row in enumerate(bi_data[1:], 1):
+                style.add("BACKGROUND", (0, i), (-1, i), sev_colors.get(row[3], colors.white))
+            t.setStyle(style)
+            story.append(t)
+            story.append(Spacer(1, 0.1 * inch))
+
+        # ── Findings ──
         findings = all_data.get("findings", [])
         if findings:
             story.extend(self._section("Key Findings"))
             for f in findings:
                 story.append(self._p(f"• {f}", "Finding"))
+            story.append(Spacer(1, 0.08 * inch))
 
-        # Recommendations
+        # ── Recommendations ──
         recs = all_data.get("recommendations", [])
         if recs:
             story.extend(self._section("Recommendations"))
             for r in recs:
                 story.append(self._p(f"• {r}", "Finding"))
+
+        # ── Error/note if dataset not on disk ──
+        if all_data.get("error"):
+            story.extend(self._section("Note"))
+            story.append(self._p(str(all_data["error"]), "BodyText2"))
 
         doc.build(story, onFirstPage=_header_footer, onLaterPages=_header_footer)
         return buffer.getvalue()

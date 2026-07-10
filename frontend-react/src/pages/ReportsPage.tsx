@@ -73,27 +73,16 @@ export default function ReportsPage() {
   const generateMutation = useMutation({
     mutationFn: async ({ reportType, format }: { reportType: string; format: string }) => {
       if (!selectedId) throw new Error('No dataset selected')
-      // Use axios api instance so VITE_API_URL is respected (fixes local dev port mismatch)
-      const resp = await api.post(
+      // Generate report — store on server, don't auto-download
+      await api.post(
         `/reports/${reportType}?format=${format}`,
         { dataset_id: selectedId },
-        { responseType: 'blob' }
+        { responseType: 'blob' }  // still get blob but don't trigger download
       )
-      const blob = new Blob([resp.data], {
-        type: format === 'pdf' ? 'application/pdf' : 'application/json'
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${reportType}_report_${selectedId?.slice(0, 8)}.${format}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
       return { reportType, format }
     },
     onSuccess: ({ reportType, format }) => {
-      toast.success(`${reportType} report downloaded!`)
+      toast.success(`${reportType} report generated — click Download in Recent Reports to save it.`)
       refetchReports()
     },
     onError: (err: any) => {
@@ -114,18 +103,27 @@ export default function ReportsPage() {
   }
 
   const handleDownload = async (report: ReportRecord) => {
-    const reportId = report.report_id || report.id
-    if (!reportId) return
+    // Re-generate the report and download it
+    const reportType = report.report_type === 'executive' ? 'executive-summary' : report.report_type
+    const fmt = report.format || 'pdf'
     try {
-      const res = await api.get(`/reports/download/${reportId}`, { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
+      const resp = await api.post(
+        `/reports/${reportType}?format=${fmt}`,
+        { dataset_id: selectedId },
+        { responseType: 'blob' }
+      )
+      const blob = new Blob([resp.data], { type: fmt === 'pdf' ? 'application/pdf' : 'application/json' })
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${report.report_type}_report.${report.format}`
+      a.download = `${report.report_type}_report.${fmt}`
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      toast.success('Report downloaded')
     } catch {
-      toast.error('Download failed')
+      toast.error('Download failed — try regenerating the report')
     }
   }
 
