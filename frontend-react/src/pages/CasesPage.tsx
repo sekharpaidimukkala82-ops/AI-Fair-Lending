@@ -259,8 +259,11 @@ export default function CasesPage() {
 
   const { data: cases = [], isLoading } = useQuery({
     queryKey: ['cases', activeDataset?.file_id, statusFilter],
-    queryFn: () => casesApi.list({ dataset_id: activeDataset?.file_id, status_filter: statusFilter || undefined }),
-    refetchInterval: 30000,
+    queryFn: () => casesApi.list({
+      dataset_id: activeDataset?.file_id,
+      status_filter: statusFilter || undefined,
+    }),
+    refetchInterval: 15000,  // refresh every 15s to catch new auto-created cases
   })
 
   const createMutation = useMutation({
