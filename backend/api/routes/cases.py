@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database.connection import get_db
 from backend.database.models import Case, CaseComment, Dataset, FairnessAudit, User
-from backend.auth.dependencies import get_current_user
+from backend.auth.dependencies import get_current_user, get_current_user_optional
 from backend.database.crud import log_action
 
 router = APIRouter(prefix="/cases", tags=["Case Management"])
@@ -87,7 +87,7 @@ async def _resolve_dataset_id(file_id: str, db: AsyncSession) -> str:
 async def create_case(
     req: CreateCaseRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Create a new bias case (manual or auto-created from audit)."""
     ds_pk = await _resolve_dataset_id(req.dataset_id, db)
@@ -126,7 +126,7 @@ async def list_cases(
     status_filter: Optional[str] = None,
     severity: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """List all cases, optionally filtered."""
     q = select(Case).order_by(Case.created_at.desc())
@@ -145,7 +145,7 @@ async def list_cases(
 async def get_case(
     case_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     row = await db.execute(select(Case).where(Case.id == case_id))
     case = row.scalar_one_or_none()
@@ -159,7 +159,7 @@ async def update_case(
     case_id: str,
     req: UpdateCaseRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Update case details / status / assignment."""
     row = await db.execute(select(Case).where(Case.id == case_id))
@@ -185,7 +185,7 @@ async def update_case(
 async def delete_case(
     case_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     from sqlalchemy import delete as sql_delete
     await db.execute(sql_delete(CaseComment).where(CaseComment.case_id == case_id))
@@ -200,7 +200,7 @@ async def add_comment(
     case_id: str,
     req: AddCommentRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     row = await db.execute(select(Case).where(Case.id == case_id))
     if not row.scalar_one_or_none():
@@ -222,7 +222,7 @@ async def add_comment(
 async def list_comments(
     case_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     rows = await db.execute(
         select(CaseComment).where(CaseComment.case_id == case_id)
